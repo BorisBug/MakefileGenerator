@@ -1,2 +1,7 @@
 # MakefileGenerator
-A python script that can collect all source files with any folder structure, then compile and run all executables. As a side effect off this this script is also capable to generate a Makefile to fit the needs of the specific folder structure.
+
+A python script that can collect all the source files within any folder structure.
+
+It has the capabilities to compile and run all executables.
+
+And the main goal is to generate a Makefile to fit the needs of the specific folder structure.
