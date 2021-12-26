@@ -1,6 +1,8 @@
 
-from pathlib import Path
 import os
+from pathlib import Path
+import builder_cfg as cfg
+
 
 class Builder:
     def __init__(self) -> None:
@@ -128,32 +130,40 @@ class Builder:
         buildDependencyTree()
         
     def printListSources(self):
-        print("Files to convert into objects:")
         for name in self._cFiles:
             print(self._paths[name])
         print()
 
     def printListExecs(self):
-        print("Files becoming executables:")
         for name in self._exeFiles:
             print(self._paths[name])
         print()
 
     def printListIncludeFolders(self):
-        print("Folders for include flag:")
         for path in self._folders:
             print(path)
         print()
-    
+
     def printListDependencies(self):
-        print("Dependencies for each file:")
         for dep in self._deps:
             print(f"{dep} -> {self._deps[dep]}")
         print()
     
-    def build(self, pathBuild="build", cFlags="-Wall -Werror -Wextra -Wpedantic", lFlags="", run=True):
+    def build(self, pathBuild="build", run=True):
 
         incFlag = ""
+
+        def getBuildRelativePath(file:str, replaceFrom="", replaceTo=""):
+            if(cfg.buildKeepFolderStructure):
+                path = Path(pathBuild, str(self._paths[file]).replace(replaceFrom, replaceTo))
+            else:
+                path = Path(pathBuild, file.replace(replaceFrom, replaceTo))
+
+            # create folder structure
+            if not os.path.isdir(path.parent):
+                os.makedirs(path.parent)
+                
+            return path
 
         def gccCompile(cFile:str):
             def getIncludeFlag():
@@ -164,32 +174,26 @@ class Builder:
                 for dir in self._folders: 
                     incFlag += " -I./" + dir
                 return incFlag
-
-            inc = getIncludeFlag()
-            out = str(Path(pathBuild, cFile.replace(".c",".o")))
+                
+            inc = getIncludeFlag()            
+            obj = getBuildRelativePath(cFile, ".c", ".o")
             src = self._paths[cFile]
-            gcc = f"gcc {cFlags} -c {src} {inc} -o {out}"
+            gcc = f"gcc {cfg.cFlags} -c {src} {inc} -o {obj}"
             gcc = gcc.replace("  ", " ")
             return gcc
 
         def gccLink(cFile:str):
-            def getBuildObjs(exeName):
-                    objs = ""
-                    for obj in self._deps[exeName]:
-                        objs += str(Path(pathBuild, obj)) + " "
-                    return objs.strip()
 
-            exeName = cFile.replace(".c",".exe")
-            out = Path(pathBuild, exeName)
-            objs = getBuildObjs(exeName)
-            gcc = f"gcc {objs} {lFlags} -o {out}"
+            def getBuildObjs(exeName):               
+                objs = ""
+                for cFile in self._deps[exeName]:
+                    objs += str(getBuildRelativePath(cFile, ".c", ".o")) + " "
+                return objs.strip()
+
+            out = getBuildRelativePath(cFile, ".c",".exe")
+            objs = getBuildObjs(cFile.replace(".c",".exe"))
+            gcc = f"gcc {objs} {cfg.lFlags} -o {out}"
             return gcc.replace("  ", " ")
-
-        print("Build all:")
-
-        # create build bolder
-        if not os.path.isdir(pathBuild):
-            os.makedirs(pathBuild)
 
         # compile -> create object files
         for cFile in self._cFiles:
@@ -206,19 +210,36 @@ class Builder:
         # run all executables
         if run:
             for cFile in self._exeFiles:
-                exeName = cFile.replace(".c",".exe")
-                exePath = Path(pathBuild, exeName)
+                exePath = getBuildRelativePath(cFile, ".c", ".exe")
                 print()
-                print(f"Running {exeName}...")
+                print(f"Running {exePath.name}...")
                 os.system(f"./{exePath}")
 
+    def createMakefile(self, pathOrigin:str=".", pathBuild:str="./build"):
+        # TODO
+        make = ""
+        Path(pathOrigin, "Makefile").write_text(make)
 
+
+# make some space :p
 print("\n"*20)
+
 b = Builder()
 b.load("sample")
+
+print("Files to convert into objects:")
 b.printListSources()
+
+print("Files becoming executables:")
 b.printListExecs()
+
+print("Folders with header files to include:")
 b.printListIncludeFolders()
+
+print("Dependencies for each file:")
 b.printListDependencies()
+
+print("Build and run all files:")
 b.build("sample/build", run=True)
+
 #b.createMakefile(".", "./build")

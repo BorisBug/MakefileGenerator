@@ -4,3 +4,4 @@
 *.d
 *.pyc
 *.exe
+Makefile
