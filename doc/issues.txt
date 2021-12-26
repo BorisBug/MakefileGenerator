@@ -1,10 +1,22 @@
+Issues / Ideas / Features
+>----->----->----->
 
-
+Done
 000 add files
 001 build: keep folder folder structure 
+002 change str.replace for Path.stem+'.x'
+
+Doing
+
+Todo
+xxx build: change the 'sample/build' to 'build'
+xxx makefile: create
+xxx build: check timestamps to minimize building process
 
 
 
-
-
+----->
+Boris Snäll
+borissnaell@gmail.com
+----->----->----->----->
 

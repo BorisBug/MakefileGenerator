@@ -1,5 +1,6 @@
 
 import os
+import shutil
 from pathlib import Path
 import builder_cfg as cfg
 
@@ -87,9 +88,10 @@ class Builder:
                     self._exeFiles.append(cFile)
 
                 # every .c file generates an .o file and a dependency
-                obj = cFile.replace(".c",".o")
+
+                obj = path.stem + ".o"
                 self._deps[obj] = [cFile]
-                self._paths[obj] = Path(str(path).replace(".c",".o"))
+                self._paths[obj] = Path(path.parent, path.stem+".o")
 
                 # load it's .h dependencies
                 self._deps[cFile] = getIncludedDeps(path)
@@ -106,11 +108,11 @@ class Builder:
                         return deps
                     skip += [cFileName]
                     for name in self._deps[cFileName]:
-                        name = str(name)
-                        if name.find(".h")>=0:
-                            src = name.replace(".h", ".c")
+                        name = Path(name)
+                        if name.suffix == ".h":
+                            src = name.stem + ".c"
                             if src in self._deps:
-                                obj = name.replace(".h", ".o")
+                                obj = name.stem + ".o"
                                 if obj not in deps:
                                     deps += [obj]
                                 for obj in getDepDeps(src):
@@ -118,10 +120,10 @@ class Builder:
                                         deps += [obj] 
                     return deps
 
-                exeName = cFile.replace(".c",".exe")
-                objName = cFile.replace(".c",".o")
+                objName = Path(cFile).stem + ".o"
+                exeName = Path(cFile).stem + cfg.execExtension # ".exe"
                 self._deps[exeName] = [objName]
-                self._paths[exeName] = Path(str(self._paths[cFile]).replace(".c",".exe"))
+                self._paths[exeName] = Path(self._paths[cFile].parent, exeName)
 
                 deps = getDepDeps(cFile)
                 self._deps[exeName] += deps
@@ -149,15 +151,16 @@ class Builder:
             print(f"{dep} -> {self._deps[dep]}")
         print()
     
-    def build(self, pathBuild="build", run=True):
+    def build(self, pathBuild="build", run=True, clean=True):
 
         incFlag = ""
 
-        def getBuildRelativePath(file:str, replaceFrom="", replaceTo=""):
+        def getBuildRelativePath(file:str, newSuffix =""):
             if(cfg.buildKeepFolderStructure):
-                path = Path(pathBuild, str(self._paths[file]).replace(replaceFrom, replaceTo))
+                path = self._paths[file]
+                path = Path(pathBuild, path.parent, Path(path.stem + newSuffix))
             else:
-                path = Path(pathBuild, file.replace(replaceFrom, replaceTo))
+                path = Path(pathBuild, Path(file).stem + newSuffix)
 
             # create folder structure
             if not os.path.isdir(path.parent):
@@ -176,43 +179,46 @@ class Builder:
                 return incFlag
                 
             inc = getIncludeFlag()            
-            obj = getBuildRelativePath(cFile, ".c", ".o")
+            obj = getBuildRelativePath(cFile, ".o")
             src = self._paths[cFile]
-            gcc = f"gcc {cfg.cFlags} -c {src} {inc} -o {obj}"
-            gcc = gcc.replace("  ", " ")
-            return gcc
+            return f"{cfg.compiler} {cfg.cFlags} -c {src} {inc} -o {obj}".replace("  ", " ")
 
         def gccLink(cFile:str):
-
             def getBuildObjs(exeName):               
                 objs = ""
                 for cFile in self._deps[exeName]:
-                    objs += str(getBuildRelativePath(cFile, ".c", ".o")) + " "
+                    objs += str(getBuildRelativePath(cFile, ".o")) + " "
                 return objs.strip()
 
-            out = getBuildRelativePath(cFile, ".c",".exe")
-            objs = getBuildObjs(cFile.replace(".c",".exe"))
-            gcc = f"gcc {objs} {cfg.lFlags} -o {out}"
-            return gcc.replace("  ", " ")
+            out = getBuildRelativePath(cFile, cfg.execExtension)
+            objs = getBuildObjs(Path(cFile).stem + cfg.execExtension)
+            return f"{cfg.compiler} {objs} {cfg.lFlags} -o {out}".replace("  ", " ")
 
+        # remove build folder
+        if clean and os.path.isdir(pathBuild):
+            shutil.rmtree(pathBuild, ignore_errors = True)
+    
         # compile -> create object files
         for cFile in self._cFiles:
-            gcc = gccCompile(cFile)
-            print(gcc)
-            os.system(gcc)
+            command = gccCompile(cFile)
+            if not cfg.buildQuiet:
+                print(command)
+            os.system(command)
 
         # link -> create executable files
         for cFile in self._exeFiles:
-            gcc = gccLink(cFile)
-            print(gcc)
-            os.system(gcc)
+            command = gccLink(cFile)
+            if not cfg.buildQuiet:
+                print(command)
+            os.system(command)
 
         # run all executables
         if run:
             for cFile in self._exeFiles:
-                exePath = getBuildRelativePath(cFile, ".c", ".exe")
-                print()
-                print(f"Running {exePath.name}...")
+                exePath = getBuildRelativePath(cFile, cfg.execExtension)
+                if not cfg.buildQuiet:
+                    print()
+                    print(f"Running {exePath.name}...")
                 os.system(f"./{exePath}")
 
     def createMakefile(self, pathOrigin:str=".", pathBuild:str="./build"):
@@ -240,6 +246,6 @@ print("Dependencies for each file:")
 b.printListDependencies()
 
 print("Build and run all files:")
-b.build("sample/build", run=True)
+b.build("sample/build", run=True, clean=True)
 
 #b.createMakefile(".", "./build")
