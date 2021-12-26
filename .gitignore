@@ -4,4 +4,7 @@
 *.d
 *.pyc
 *.exe
-Makefile
+out
+bin
+build
+Makefile*
