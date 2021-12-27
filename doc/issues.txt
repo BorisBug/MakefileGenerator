@@ -6,11 +6,13 @@ Done
 001 build: keep folder folder structure 
 002 change str.replace for Path.stem+'.x'
 003 build: change the 'sample/build' to 'build'
+004 makefile: create w/tree
 
 Doing
-xxx makefile: create
 
 Todo
+xxx makefile w/tree -> place executables in the relative folder
+xxx makefile no/tree
 xxx build: check timestamps to minimize building process
 
 
