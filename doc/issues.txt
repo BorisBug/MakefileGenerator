@@ -5,12 +5,12 @@ Done
 000 add files
 001 build: keep folder folder structure 
 002 change str.replace for Path.stem+'.x'
+003 build: change the 'sample/build' to 'build'
 
 Doing
+xxx makefile: create
 
 Todo
-xxx build: change the 'sample/build' to 'build'
-xxx makefile: create
 xxx build: check timestamps to minimize building process
 
 

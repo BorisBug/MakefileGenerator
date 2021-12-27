@@ -154,11 +154,16 @@ class Builder:
     def build(self, pathBuild="build", run=True, clean=True):
 
         incFlag = ""
+        pathBuild = Path(pathBuild)
 
-        def getBuildRelativePath(file:str, newSuffix =""):
+        def getBuildRelativePath(file:str, newSuffix=""):
             if(cfg.buildKeepFolderStructure):
                 path = self._paths[file]
-                path = Path(pathBuild, path.parent, Path(path.stem + newSuffix))
+                # hardcoded to "build" as one single folder
+                if len(Path(path).parts)>1 and len(pathBuild.parts)>0 and Path(path).parts[0]==pathBuild.parts[0]:
+                    path = Path(pathBuild, "/".join(path.parts[1:-1]), path.stem + newSuffix)
+                else:
+                    path = Path(pathBuild, path.parent, path.stem + newSuffix)
             else:
                 path = Path(pathBuild, Path(file).stem + newSuffix)
 
@@ -195,7 +200,8 @@ class Builder:
             return f"{cfg.compiler} {objs} {cfg.lFlags} -o {out}".replace("  ", " ")
 
         # remove build folder
-        if clean and os.path.isdir(pathBuild):
+        
+        if clean and pathBuild.is_dir() and pathBuild.cwd()!=pathBuild.absolute():
             shutil.rmtree(pathBuild, ignore_errors = True)
     
         # compile -> create object files
@@ -232,7 +238,7 @@ print("\n"*20)
 
 b = Builder()
 b.load("sample")
-
+"""
 print("Files to convert into objects:")
 b.printListSources()
 
@@ -248,4 +254,5 @@ b.printListDependencies()
 print("Build and run all files:")
 b.build("sample/build", run=True, clean=True)
 
-#b.createMakefile(".", "./build")
+"""
+b.createMakefile(".", "./build")
