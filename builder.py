@@ -29,11 +29,9 @@ class Builder:
                     # collect all the .c files
                     if path.suffix==".c": 
                         self._cFiles.append(path.name)
-                        self._deps[path.name] = []
                         self._paths[path.name] = path
                     # collect all the .h files
                     elif path.suffix==".h": 
-                        self._deps[path.name] = []
                         self._paths[path.name] = path
                 # if is a folder...
                 elif path.is_dir():
@@ -65,7 +63,10 @@ class Builder:
                 while pos1>=0:
                     pos1 += len(include)
                     pos2 = content.find('"', pos1)
-                    assert pos2>=0
+                    if pos2<0:
+                        # something wrong with the syntax
+                        # TODO raise an exception
+                        break
                     depName = content[pos1:pos2]
                     deps.append(depName)
                     pos1 = content.find(include, pos2+1)
@@ -87,46 +88,34 @@ class Builder:
                 if isExe(path):
                     self._exeFiles.append(cFile)
 
-                # every .c file generates an .o file and a dependency
-
+                # every .c file generates an .o file
                 obj = path.stem + ".o"
-                self._deps[obj] = [cFile]
-                self._paths[obj] = Path(path.parent, path.stem+".o")
-
-                # load it's .h dependencies
-                self._deps[cFile] = getIncludedDeps(path)
+                self._deps[obj] = [cFile] + getIncludedDeps(path)
+                self._paths[obj] = Path(path.parent, obj)
 
             # deps for exe files
             for cFile in self._exeFiles:
-
                 skip = []
 
-                def getDepDeps(cFileName:str):
+                def getDepDeps(obj:str):
                     nonlocal skip
                     deps = []
-                    if cFileName in skip:
-                        return deps
-                    skip += [cFileName]
-                    for name in self._deps[cFileName]:
-                        name = Path(name)
-                        if name.suffix == ".h":
-                            src = name.stem + ".c"
-                            if src in self._deps:
-                                obj = name.stem + ".o"
-                                if obj not in deps:
-                                    deps += [obj]
-                                for obj in getDepDeps(src):
+                    skip += [obj]
+                    for name in self._deps[obj]:
+                        obj = Path(name).stem + ".o"
+                        if obj in self._deps:
+                            if obj not in deps:
+                                deps += [obj]
+                            if obj not in skip:
+                                for obj in getDepDeps(obj):
                                     if obj not in deps:
                                         deps += [obj] 
                     return deps
 
                 objName = Path(cFile).stem + ".o"
                 exeName = Path(cFile).stem + cfg.execExtension
-                self._deps[exeName] = [objName]
+                self._deps[exeName] = getDepDeps(objName)
                 self._paths[exeName] = Path(self._paths[cFile].parent, exeName)
-
-                deps = getDepDeps(cFile)
-                self._deps[exeName] += deps
     
         scanOriginFolder()
         buildDependencyTree()
@@ -186,7 +175,7 @@ class Builder:
             inc = getIncludeFlag()            
             obj = getBuildRelativePath(cFile, ".o")
             src = self._paths[cFile]
-            return f"{cfg.compiler} {cfg.cFlags} -c {src} {inc} -o {obj}".replace("  ", " ")
+            return f"{cfg.compiler} {cfg.cFlags} -MMD -c {src} {inc} -o {obj}".replace("  ", " ")
 
         def gccLink(cFile:str):
             def getBuildObjs(exeName):               
@@ -331,19 +320,6 @@ clean:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 b = Builder()
 b.load("sample")
 """
@@ -359,10 +335,12 @@ b.printListExecs()
 print("Folders with header files to include:")
 b.printListIncludeFolders()
 
+"""
 print("Dependencies for each file:")
 b.printListDependencies()
 
 print("Build and run all files:")
 b.build("sample/build", run=True, clean=True)
-"""
-b.createMakefile("sample", "sample/build")
+
+#print("Create a makefile")
+#b.createMakefile("sample", "sample/build")
