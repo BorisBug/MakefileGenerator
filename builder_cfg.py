@@ -18,8 +18,9 @@ execExtension = ""
 # when building..
 # True: the resulting files duplicate the same folder structure
 # False: the resulting files are collected all together under one single folder
-buildKeepFolderStructure = True
+buildKeepFolderStructure = False
+makeKeepFolderStructure = False
 
 # print gcc commands
-buildQuiet = True
-makeQuiet = True
+buildQuiet = False
+makeQuiet = False

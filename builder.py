@@ -13,7 +13,6 @@ class Builder:
         self._folders = []
         self._deps = {}
         self._paths = {}
-        self._tstamps = {}
         
     def load(self, path="."):
         self._origin = Path(path)
@@ -22,7 +21,6 @@ class Builder:
         self._folders.clear()
         self._deps.clear()
         self._paths.clear()
-        self._tstamps.clear()
 
         # scan recursively the complete folder tree
         def scanOriginFolder():
@@ -43,11 +41,6 @@ class Builder:
                         if x.is_file():
                             self._folders.append(str(path))
                             break
-
-        # load the timestamps for each collected file
-        def loadTimestamps():
-            for name in self._paths:
-                self._tstamps[name] = os.path.getmtime(self._paths[name])
 
         # load dependency tree
         def loadDependencies():
@@ -119,7 +112,6 @@ class Builder:
                 self._paths[exeName] = Path(self._paths[cFile].parent, exeName)
     
         scanOriginFolder()
-        loadTimestamps()
         loadDependencies()
         
     def printListSources(self):
@@ -139,23 +131,25 @@ class Builder:
 
     def printListDependencies(self):
         for dep in self._deps:
-            print(f"{dep} -> {self._deps[dep]}")
+            print(f"{dep} -> {' '.join(self._deps[dep])}")
         print()
     
     def build(self, pathBuild="build", run=True, clean=True):
 
         incFlag = ""
         pathBuild = Path(pathBuild)
+        fileCounter = 0
 
         def getBuildRelativePath(file:str, newSuffix=""):
             nonlocal pathBuild
             newName = Path(file).stem + newSuffix
 
             if(cfg.buildKeepFolderStructure):
+                path = self._paths[file].relative_to(self._origin)
                 if pathBuild.is_relative_to(self._origin):
-                    path = Path(self._origin, pathBuild.relative_to(self._origin), self._paths[file].relative_to(self._origin).parent, newName)
+                    path = Path(self._origin, pathBuild.relative_to(self._origin), path.parent, newName)
                 else:
-                    path = Path(pathBuild, self._paths[file].parent, newName)
+                    path = Path(pathBuild, path.parent, newName)
             else:
                 path = Path(pathBuild, newName)
 
@@ -178,36 +172,61 @@ class Builder:
             inc = getIncludeFlag()            
             obj = getBuildRelativePath(cFile, ".o")
             src = self._paths[cFile]
-            return f"{cfg.compiler} {cfg.cFlags} -MMD -c {src} {inc} -o {obj}".replace("  ", " ")
+            return f"{cfg.compiler} -c {src} {cfg.cFlags} {inc} -o {obj}".replace("  ", " ")
 
         def gccLink(cFile:str):
-            def getBuildObjs(exeName):               
+            def getBuildObjs(exeName):
                 objs = ""
-                for cFile in self._deps[exeName]:
-                    objs += str(getBuildRelativePath(cFile, ".o")) + " "
+                for oFile in self._deps[exeName]:
+                    objs += str(getBuildRelativePath(oFile, ".o")) + " "
                 return objs.strip()
 
             out = getBuildRelativePath(cFile, cfg.execExtension)
             objs = getBuildObjs(Path(cFile).stem + cfg.execExtension)
             return f"{cfg.compiler} {objs} {cfg.lFlags} -o {out}".replace("  ", " ")
 
-        def loopFiles(files, action):
-            for file in files:
-                cmd = action(file)
-                if not cfg.buildQuiet:
-                    print(cmd)
-                os.system(cmd)
+        def getTimestamp(path):
+            return 0.0 if not os.path.isfile(path) else os.path.getmtime(path)
 
         # remove build folder
         if clean and pathBuild.is_dir() and pathBuild.cwd()!=pathBuild.absolute():
             shutil.rmtree(pathBuild, ignore_errors = True)
 
         # compile -> create object files
-        loopFiles(self._srcs, gccCompile)
+        for cFile in self._srcs:
+            oName = Path(cFile).stem + ".o"
+            stampObj = getTimestamp(getBuildRelativePath(cFile, ".o"))
+            for xFile in self._deps[oName]:
+                # filter files that are not inside the folder structure
+                if xFile in self._paths:
+                    stampDep = getTimestamp(self._paths[xFile])
+                    if stampObj<stampDep:
+                        cmd = gccCompile(cFile)
+                        if not cfg.buildQuiet:
+                            print(cmd)
+                        os.system(cmd)
+                        fileCounter += 1
+                        break
 
         # link -> create executable files
-        loopFiles(self._execs, gccLink)
-
+        for cFile in self._execs:
+            exeName = Path(cFile).stem + cfg.execExtension
+            stampExe = getTimestamp(getBuildRelativePath(cFile, cfg.execExtension))
+            for oFile in self._deps[exeName]:
+                # filter files that are not inside the folder structure
+                if oFile in self._paths:
+                    stampObj = getTimestamp(getBuildRelativePath(oFile, ".o"))
+                    if stampExe<stampObj:
+                        cmd = gccLink(cFile)
+                        if not cfg.buildQuiet:
+                            print(cmd)
+                        os.system(cmd)
+                        fileCounter += 1
+                        break
+        
+        if fileCounter<=0 and not cfg.buildQuiet:
+            print("Nothing to build, all dependencies are up-to-date.")
+        
         # run all executables
         if run:
             for cFile in self._execs:
@@ -217,7 +236,7 @@ class Builder:
                     print(f"Running {exePath.name}...")
                 os.system(f"./{exePath}")
 
-    def createMakefile(self, pathBuild="./build"):
+    def createMakefile(self, pathBuild="build"):
         pathBuild = Path(pathBuild)
         if pathBuild.is_relative_to(self._origin):
             pathBuild = pathBuild.relative_to(self._origin)
@@ -316,7 +335,7 @@ clean:
 
 
 # make some space :p
-print("\n"*20)
+print("\n"*10)
 
 b = Builder()
 b.load("sample")
@@ -327,12 +346,8 @@ print("Files becoming executables:")
 b.printListExecs()
 print("Folders with header files to include:")
 b.printListIncludeFolders()
-"""
 print("Dependencies for each file:")
 b.printListDependencies()
-b.build("sample/build", run=False, clean=True)
-b.build("sample/build2", run=False, clean=True)
-b.build("sample2/build", run=False, clean=True)
+"""
+b.build("sample/build", run=False, clean=False)
 b.createMakefile("sample/build")
-b.createMakefile("sample/build2")
-b.createMakefile("sample2/build")
