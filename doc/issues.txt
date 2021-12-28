@@ -10,7 +10,7 @@ Done
 005 dependencies: better tree
 
 Doing
-xxx build: check timestamps to minimize building process
+006 build: check timestamps to minimize building process
 
 Todo
 xxx makefile w/tree -> place executables in the relative folder

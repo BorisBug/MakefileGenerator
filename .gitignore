@@ -9,4 +9,5 @@ bin
 build
 Makefile*
 .vscode
+.DS_Store
 __pycache__
