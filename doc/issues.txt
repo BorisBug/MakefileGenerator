@@ -7,13 +7,14 @@ Done
 002 change str.replace for Path.stem+'.x'
 003 build: change the 'sample/build' to 'build'
 004 makefile: create w/tree
+005 dependencies: better tree
 
 Doing
+xxx build: check timestamps to minimize building process
 
 Todo
 xxx makefile w/tree -> place executables in the relative folder
 xxx makefile no/tree
-xxx build: check timestamps to minimize building process
 
 
 
