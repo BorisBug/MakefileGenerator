@@ -8,13 +8,15 @@ Done
 003 build: change the 'sample/build' to 'build'
 004 makefile: create w/tree
 005 dependencies: better tree
+006 sample: added more complex structure
 
 Doing
-006 build: check timestamps to minimize building process
+007 build: check timestamps to minimize building process
 
 Todo
 xxx makefile w/tree -> place executables in the relative folder
 xxx makefile no/tree
+xxx return nonzero if gcc or building makefile gives error
 
 
 

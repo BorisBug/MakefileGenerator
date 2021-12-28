@@ -8,19 +8,21 @@ import builder_cfg as cfg
 class Builder:
     def __init__(self) -> None:
         self._origin = Path()
-        self._cFiles = []
-        self._exeFiles = []
+        self._srcs = []
+        self._execs = []
         self._folders = []
         self._deps = {}
         self._paths = {}
+        self._tstamps = {}
         
     def load(self, path="."):
         self._origin = Path(path)
-        self._cFiles.clear()
-        self._exeFiles.clear()
+        self._srcs.clear()
+        self._execs.clear()
         self._folders.clear()
         self._deps.clear()
         self._paths.clear()
+        self._tstamps.clear()
 
         # scan recursively the complete folder tree
         def scanOriginFolder():
@@ -29,7 +31,7 @@ class Builder:
                 if path.is_file():
                     # collect all the .c files
                     if path.suffix==".c": 
-                        self._cFiles.append(path.name)
+                        self._srcs.append(path.name)
                         self._paths[path.name] = path
                     # collect all the .h files
                     elif path.suffix==".h": 
@@ -41,9 +43,14 @@ class Builder:
                         if x.is_file():
                             self._folders.append(str(path))
                             break
-        
+
+        # load the timestamps for each collected file
+        def loadTimestamps():
+            for name in self._paths:
+                self._tstamps[name] = os.path.getmtime(self._paths[name])
+
         # load dependency tree
-        def buildDependencyTree():
+        def loadDependencies():
 
             # is going to be an executable (link!)
             def isExe(path):
@@ -82,12 +89,11 @@ class Builder:
                 return deps + depextra
         
             # deps for .c files
-            for cFile in self._cFiles:
-
+            for cFile in self._srcs:
                 # if it will become executable, save it for the linking process
                 path = self._paths[cFile]
                 if isExe(path):
-                    self._exeFiles.append(cFile)
+                    self._execs.append(cFile)
 
                 # every .c file generates an .o file
                 obj = path.stem + ".o"
@@ -95,39 +101,34 @@ class Builder:
                 self._paths[obj] = Path(path.parent, obj)
 
             # deps for exe files
-            for cFile in self._exeFiles:
-                skip = []
-
-                def getDepDeps(obj:str):
-                    nonlocal skip
-                    deps = []
-                    skip += [obj]
+            for cFile in self._execs:
+                deps = []
+                def getDeps(obj:str):
+                    nonlocal deps
                     for name in self._deps[obj]:
                         obj = Path(name).stem + ".o"
-                        if obj in self._deps:
-                            if obj not in deps:
-                                deps += [obj]
-                            if obj not in skip:
-                                for obj in getDepDeps(obj):
-                                    if obj not in deps:
-                                        deps += [obj] 
+                        if obj in self._deps and obj not in deps:
+                            deps.append(obj)
+                            for obj in getDeps(obj):
+                                if obj not in deps:
+                                    deps.append(obj)
                     return deps
-
                 objName = Path(cFile).stem + ".o"
                 exeName = Path(cFile).stem + cfg.execExtension
-                self._deps[exeName] = getDepDeps(objName)
+                self._deps[exeName] = getDeps(objName)
                 self._paths[exeName] = Path(self._paths[cFile].parent, exeName)
     
         scanOriginFolder()
-        buildDependencyTree()
+        loadTimestamps()
+        loadDependencies()
         
     def printListSources(self):
-        for name in self._cFiles:
+        for name in self._srcs:
             print(self._paths[name])
         print()
 
     def printListExecs(self):
-        for name in self._exeFiles:
+        for name in self._execs:
             print(self._paths[name])
         print()
 
@@ -147,15 +148,16 @@ class Builder:
         pathBuild = Path(pathBuild)
 
         def getBuildRelativePath(file:str, newSuffix=""):
+            nonlocal pathBuild
+            newName = Path(file).stem + newSuffix
+
             if(cfg.buildKeepFolderStructure):
-                path = self._paths[file]
-                # hardcoded to "build" as one single folder
-                if len(Path(path).parts)>1 and len(pathBuild.parts)>0 and Path(path).parts[0]==pathBuild.parts[0]:
-                    path = Path(pathBuild, "/".join(path.parts[1:-1]), path.stem + newSuffix)
+                if pathBuild.is_relative_to(self._origin):
+                    path = Path(self._origin, pathBuild.relative_to(self._origin), self._paths[file].relative_to(self._origin).parent, newName)
                 else:
-                    path = Path(pathBuild, path.parent, path.stem + newSuffix)
+                    path = Path(pathBuild, self._paths[file].parent, newName)
             else:
-                path = Path(pathBuild, Path(file).stem + newSuffix)
+                path = Path(pathBuild, newName)
 
             # create folder structure
             if not os.path.isdir(path.parent):
@@ -189,46 +191,42 @@ class Builder:
             objs = getBuildObjs(Path(cFile).stem + cfg.execExtension)
             return f"{cfg.compiler} {objs} {cfg.lFlags} -o {out}".replace("  ", " ")
 
+        def loopFiles(files, action):
+            for file in files:
+                cmd = action(file)
+                if not cfg.buildQuiet:
+                    print(cmd)
+                os.system(cmd)
+
         # remove build folder
-        
         if clean and pathBuild.is_dir() and pathBuild.cwd()!=pathBuild.absolute():
             shutil.rmtree(pathBuild, ignore_errors = True)
-    
+
         # compile -> create object files
-        for cFile in self._cFiles:
-            command = gccCompile(cFile)
-            if not cfg.buildQuiet:
-                print(command)
-            os.system(command)
+        loopFiles(self._srcs, gccCompile)
 
         # link -> create executable files
-        for cFile in self._exeFiles:
-            command = gccLink(cFile)
-            if not cfg.buildQuiet:
-                print(command)
-            os.system(command)
+        loopFiles(self._execs, gccLink)
 
         # run all executables
         if run:
-            for cFile in self._exeFiles:
+            for cFile in self._execs:
                 exePath = getBuildRelativePath(cFile, cfg.execExtension)
                 if not cfg.buildQuiet:
                     print()
                     print(f"Running {exePath.name}...")
                 os.system(f"./{exePath}")
 
-    def createMakefile(self, pathBuild:str="./build"):
-        execs = ""
-        sources = ""
-        objectx = ""
-        objects = ""
-        build = ""
-        targets = ""
-        tgtmenu = ""
-        runall = ""
-        phony = ""
-        info = ""
-        for i, cFile in enumerate(self._exeFiles):
+    def createMakefile(self, pathBuild="./build"):
+        pathBuild = Path(pathBuild)
+        if pathBuild.is_relative_to(self._origin):
+            pathBuild = pathBuild.relative_to(self._origin)
+
+        execs = sources = objectx = objects = phony = ""
+        build = targets = tgtmenu = runall = info = ""        
+        q = "@" if cfg.makeQuiet else "" 
+
+        for i, cFile in enumerate(self._execs):
             objs = ""
             exeName = Path(cFile).stem + cfg.execExtension
             for cFileDep in self._deps[exeName]:
@@ -243,13 +241,11 @@ class Builder:
             objectx += f"OBJS{i} := $(SRC{i}:%=$(BUILD_DIR)/%.o)\n" 
             objects += f"$(OBJS{i}) "
             build += exec + " "
-            runall += f"\t@./{exec}\n"
-            targets += f"# target: {stem}\n{exec}: $(OBJS{i})\n\t@$(CC) $^ $(LFLAGS) -o $@\n\n"
-            tgtmenu += f'{stem}: {exec}\n\t@echo "{"*"*50}"\n\t@echo "Running {stem}..."\n\t@echo "{"*"*50}"\n\t@./{exec}\n\n'
+            runall += f"\t{q}./{exec}\n"
+            targets += f"# target: {stem}\n{exec}: $(OBJS{i})\n\t{q}$(CC) $^ $(LFLAGS) -o $@\n\n"
+            tgtmenu += f'{stem}: {exec}\n\t@echo "{"*"*50}"\n\t@echo "Running {stem}..."\n\t@echo "{"*"*50}"\n\t{q}./{exec}\n\n'
             phony += stem + " "
             info += f'\t@echo "{stem}: to run {stem}"\n'
-
-        pathBuild = Path(pathBuild).relative_to(self._origin)
         make = f"""#{'-'*50}>
 # makefile autogenerated by python script
 # customize it following your own needs <3
@@ -293,8 +289,8 @@ run: build
 
 # targets for each object
 $(BUILD_DIR)/%.c.o: %.c
-\t@mkdir -p $(dir $@)
-\t@$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
+\t{q}mkdir -p $(dir $@)
+\t{q}$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
 
 .PHONY: clean build run {phony.strip()} info
 
@@ -312,7 +308,7 @@ info:
 \t@echo \"\"
 
 clean:
-\t@rm -rf $(BUILD_DIR)
+\t{q}rm -rf $(BUILD_DIR)
 
 -include $(OBJS:.o=.d)\n"""
         Path(self._origin, "Makefile").write_text(make)
@@ -334,5 +330,9 @@ b.printListIncludeFolders()
 """
 print("Dependencies for each file:")
 b.printListDependencies()
-b.build("sample/build", run=True, clean=True)
+b.build("sample/build", run=False, clean=True)
+b.build("sample/build2", run=False, clean=True)
+b.build("sample2/build", run=False, clean=True)
 b.createMakefile("sample/build")
+b.createMakefile("sample/build2")
+b.createMakefile("sample2/build")
