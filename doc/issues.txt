@@ -9,13 +9,14 @@ Done
 004 makefile: create w/tree
 005 dependencies: better tree
 006 sample: added more complex structure
+007 general: relative folder calculation & dependencies
+008 build: check timestamps to minimize building process
 
 Doing
-007 build: check timestamps to minimize building process
+xxx makefile no/tree
 
 Todo
 xxx makefile w/tree -> place executables in the relative folder
-xxx makefile no/tree
 xxx return nonzero if gcc or building makefile gives error
 
 
