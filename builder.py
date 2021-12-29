@@ -220,7 +220,9 @@ class Builder:
                         cmd = gccCompile(cFile)
                         if not cfg.beQuiet:
                             print(cmd)
-                        os.system(cmd)
+                        errCode = os.system(cmd)
+                        if errCode!=0:
+                            raise Exception(f"Error during compilation process (code:{errCode})")
                         fileCounter += 1
                         break
 
@@ -236,7 +238,9 @@ class Builder:
                         cmd = gccLink(cFile)
                         if not cfg.beQuiet:
                             print(cmd)
-                        os.system(cmd)
+                        errCode = os.system(cmd)
+                        if errCode!=0:
+                            raise Exception(f"Error during linking process (code:{errCode})")
                         fileCounter += 1
                         break
         
@@ -250,7 +254,10 @@ class Builder:
                 if not cfg.beQuiet:
                     print()
                     print(f"Running {exePath.name}...")
-                os.system(f"./{exePath}")
+                errCode = os.system(f"./{exePath}")
+                if errCode!=0:
+                    # should i do something here?
+                    pass
 
     def createMakefile(self, pathBuild="build"):
         pathBuild = Path(pathBuild)
@@ -272,6 +279,7 @@ class Builder:
                 file = self._paths[file].relative_to(self._origin)
                 if file.suffix==".c" and file.parent not in dirs:
                     dirs.append(file.parent)
+                    
             for dir in dirs:
                 tgtobjs += f"# target for objects inside of '{dir}'\n"
                 tgtobjs += f"$(BUILD_DIR)/%.o: {dir}/%.c\n"
@@ -283,6 +291,7 @@ class Builder:
             srcs = ""
             stem = Path(file).stem
             exeName = stem + cfg.execExtension
+
             if cfg.execOnBuildRoot or not cfg.keepFolderStructure:
                 exec = f"$(BUILD_DIR)/$(EXEC{i})"
             else:
@@ -374,7 +383,8 @@ clean:
 \t{q}rm -rf $(BUILD_DIR)
 
 -include $(OBJS:.o=.d)\n"""
-        Path(self._origin, "Makefile").write_text(make)
+        with open(Path(self._origin, "Makefile"), "w") as f:
+            f.write(make)
 
 
 
@@ -393,6 +403,9 @@ b.printListIncludeFolders()
 print("Dependencies for each file:")
 b.printListDependencies()
 """
-
-b.build("sample/build", run=False, clean=True)
-b.createMakefile("sample/build")
+try:
+    b.build("sample/build", run=False, clean=True)
+    b.createMakefile("sample/build")
+except Exception as ex:
+    print(ex)
+    exit(1)

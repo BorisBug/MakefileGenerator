@@ -12,14 +12,16 @@ Done
 007 general: relative folder calculation & dependencies
 008 build: check timestamps to minimize building process
 009 functionality of tree & no-tree
+010 templist: timestamps and relpath, improve avoiding repetitive calculations
+011 error: raise exception and return nonzero in case of error
 
 Doing
-010 templist: timestamps and relpath, improve avoiding repetitive calculations
 ?
 
 Todo
-xxx return nonzero if gcc or building makefile gives error
-xxx coverage
+xxx find a better way to "src=" on makefile for the case of multiple execs
+xxx add coverage option
+xxx file name duplicated.. should i do something about it?
 
 
 ----->
