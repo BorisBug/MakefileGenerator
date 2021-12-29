@@ -14,11 +14,11 @@ Done
 009 functionality of tree & no-tree
 
 Doing
+010 templist: timestamps and relpath, improve avoiding repetitive calculations
 ?
 
 Todo
 xxx return nonzero if gcc or building makefile gives error
-xxx timestamp: temp list to improve performance
 xxx coverage
 
 

@@ -1,5 +1,6 @@
 
 import os
+from posixpath import relpath
 import shutil
 from pathlib import Path
 import builder_cfg as cfg
@@ -136,27 +137,36 @@ class Builder:
     
     def build(self, pathBuild="build", run=True, clean=True):
 
-        incFlag = ""
+        # ensure a type Path
         pathBuild = Path(pathBuild)
+
+        # temp variables for the build process
+        incFlag = ""
+        tstamps = {}
+        relPaths = {}
         fileCounter = 0
 
         def getBuildRelativePath(file:str, newSuffix=""):
             nonlocal pathBuild
             newName = Path(file).stem + newSuffix
 
-            if(cfg.keepFolderStructure and (newSuffix!=cfg.execExtension or not cfg.execOnBuildRoot)):
-                path = self._paths[file].relative_to(self._origin)
-                if pathBuild.is_relative_to(self._origin):
-                    path = Path(self._origin, pathBuild.relative_to(self._origin), path.parent, newName)
-                else:
-                    path = Path(pathBuild, path.parent, newName)
+            if newName in relPaths:
+                path = relPaths[newName]
             else:
-                path = Path(pathBuild, newName)
-
-            # create folder structure
-            if not os.path.isdir(path.parent):
-                os.makedirs(path.parent)
+                if(cfg.keepFolderStructure and (newSuffix!=cfg.execExtension or not cfg.execOnBuildRoot)):
+                    path = self._paths[file].relative_to(self._origin)
+                    if pathBuild.is_relative_to(self._origin):
+                        path = Path(self._origin, pathBuild.relative_to(self._origin), path.parent, newName)
+                    else:
+                        path = Path(pathBuild, path.parent, newName)
+                else:
+                    path = Path(pathBuild, newName)
+                # create folder structure
+                if not os.path.isdir(path.parent):
+                    os.makedirs(path.parent)
                 
+                relPaths[newName] = path
+            
             return path
 
         def gccCompile(cFile:str):
@@ -186,7 +196,13 @@ class Builder:
             return f"{cfg.compiler} {objs} {cfg.lFlags} -o {out}".replace("  ", " ")
 
         def getTimestamp(path):
-            return 0.0 if not os.path.isfile(path) else os.path.getmtime(path)
+            stamp = 0.0
+            if path in tstamps:
+                stamp = float(tstamps[path])
+            if stamp == 0.0:
+                stamp = 0.0 if not os.path.isfile(path) else os.path.getmtime(path)
+                tstamps[path] = stamp
+            return stamp
 
         # remove build folder
         if clean and pathBuild.is_dir() and pathBuild.cwd()!=pathBuild.absolute():
@@ -367,9 +383,9 @@ print("\n"*5)
 
 b = Builder()
 b.load("sample")
-"""
 print("Files to convert into objects:")
 b.printListSources()
+"""
 print("Files becoming executables:")
 b.printListExecs()
 print("Folders with header files to include:")
