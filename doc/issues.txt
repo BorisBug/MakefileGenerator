@@ -11,14 +11,15 @@ Done
 006 sample: added more complex structure
 007 general: relative folder calculation & dependencies
 008 build: check timestamps to minimize building process
+009 functionality of tree & no-tree
 
 Doing
-xxx makefile no/tree
+?
 
 Todo
-xxx makefile w/tree -> place executables in the relative folder
 xxx return nonzero if gcc or building makefile gives error
-
+xxx timestamp: temp list to improve performance
+xxx coverage
 
 
 ----->

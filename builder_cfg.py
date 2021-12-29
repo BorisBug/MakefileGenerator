@@ -2,7 +2,7 @@
 # configuration for the building process
 # ------------------------------------->
 
-# compiler, tyipically gcc, clang
+# compiler, tyipically gcc or clang
 compiler = "gcc"
 
 # flags for gcc -> compile process
@@ -11,16 +11,23 @@ cFlags = "-Wall -Werror -Wpedantic -Wextra"
 # flags for gcc -> linking process
 lFlags = ""
 
+# print gcc commands
+# True: do not print shell commands on the terminal
+# False: print the shell commands on the terminal
+beQuiet = False
+
+# extension (suffix) for executables
 # in linux/unix typically there is no extension for executables
-# in windows is generally used the ".exe"
+# in windows is generally used the ".exe" extension
 execExtension = ""
 
-# when building..
+# replicate the folder structure on the build destination folder
 # True: the resulting files duplicate the same folder structure
 # False: the resulting files are collected all together under one single folder
-buildKeepFolderStructure = False
-makeKeepFolderStructure = False
+keepFolderStructure = False
 
-# print gcc commands
-buildQuiet = False
-makeQuiet = False
+# destination for executable(s)
+# this variable is depending on 'keepFolderStructure==True'
+# True: place exec on build folder
+# False: place exec on the relative folder
+execOnBuildRoot = False

@@ -144,7 +144,7 @@ class Builder:
             nonlocal pathBuild
             newName = Path(file).stem + newSuffix
 
-            if(cfg.buildKeepFolderStructure):
+            if(cfg.keepFolderStructure and (newSuffix!=cfg.execExtension or not cfg.execOnBuildRoot)):
                 path = self._paths[file].relative_to(self._origin)
                 if pathBuild.is_relative_to(self._origin):
                     path = Path(self._origin, pathBuild.relative_to(self._origin), path.parent, newName)
@@ -202,7 +202,7 @@ class Builder:
                     stampDep = getTimestamp(self._paths[xFile])
                     if stampObj<stampDep:
                         cmd = gccCompile(cFile)
-                        if not cfg.buildQuiet:
+                        if not cfg.beQuiet:
                             print(cmd)
                         os.system(cmd)
                         fileCounter += 1
@@ -218,20 +218,20 @@ class Builder:
                     stampObj = getTimestamp(getBuildRelativePath(oFile, ".o"))
                     if stampExe<stampObj:
                         cmd = gccLink(cFile)
-                        if not cfg.buildQuiet:
+                        if not cfg.beQuiet:
                             print(cmd)
                         os.system(cmd)
                         fileCounter += 1
                         break
         
-        if fileCounter<=0 and not cfg.buildQuiet:
+        if fileCounter<=0 and not cfg.beQuiet:
             print("Nothing to build, all dependencies are up-to-date.")
         
         # run all executables
         if run:
             for cFile in self._execs:
                 exePath = getBuildRelativePath(cFile, cfg.execExtension)
-                if not cfg.buildQuiet:
+                if not cfg.beQuiet:
                     print()
                     print(f"Running {exePath.name}...")
                 os.system(f"./{exePath}")
@@ -242,29 +242,60 @@ class Builder:
             pathBuild = pathBuild.relative_to(self._origin)
 
         execs = sources = objectx = objects = phony = ""
-        build = targets = tgtmenu = runall = info = ""        
-        q = "@" if cfg.makeQuiet else "" 
+        build = tgtobjs = tgtexes = tgtmenu = runall = info = ""        
+        q = "@" if cfg.beQuiet else ""
 
-        for i, cFile in enumerate(self._execs):
-            objs = ""
-            exeName = Path(cFile).stem + cfg.execExtension
-            for cFileDep in self._deps[exeName]:
-                objs += str(self._paths[cFileDep]).replace(".o",".c").replace(str(self._origin)+"/", "") + " "
+        if cfg.keepFolderStructure:
+            tgtobjs += f"# targets for each object\n"
+            tgtobjs += f"$(BUILD_DIR)/%.o: %.c\n"
+            tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
+            tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INC_FLAGS)\n\n"
+        else:
+            dirs = []
+            for file in self._paths:
+                file = self._paths[file].relative_to(self._origin)
+                if file.suffix==".c" and file.parent not in dirs:
+                    dirs.append(file.parent)
+            for dir in dirs:
+                tgtobjs += f"# target for objects inside of '{dir}'\n"
+                tgtobjs += f"$(BUILD_DIR)/%.o: {dir}/%.c\n"
+                tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
+                tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INC_FLAGS)\n\n"
 
+        for i, file in enumerate(self._execs):
             i += 1
-            exec = f"$(BUILD_DIR)/$(EXEC{i})"
-            stem = Path(cFile).stem
+            srcs = ""
+            stem = Path(file).stem
+            exeName = stem + cfg.execExtension
+            if cfg.execOnBuildRoot or not cfg.keepFolderStructure:
+                exec = f"$(BUILD_DIR)/$(EXEC{i})"
+            else:
+                file = self._paths[file].relative_to(self._origin)
+                exec = f"$(BUILD_DIR)/{file.parent}/$(EXEC{i})"
+
             execs += f"EXEC{i} := {stem}\n" 
+            for file in self._deps[exeName]:
+                file = self._paths[file].relative_to(self._origin)
+                srcs += str(Path(file.parent, file.stem + ".c")) + " "
+            sources += f"SRC{i} := {srcs.strip()}\n"
            #sources += f"SRC{i} := $(shell find $(SRC_DIRS) -name '*.c')\n"
-            sources += f"SRC{i} := {objs}\n"
-            objectx += f"OBJS{i} := $(SRC{i}:%=$(BUILD_DIR)/%.o)\n" 
+            if cfg.keepFolderStructure:
+                objectx += f"OBJS{i} := $(SRC{i}:%.c=$(BUILD_DIR)/%.o)\n"
+            else:
+                objectx += f"OBJS{i} := $(addprefix $(BUILD_DIR)/, $(notdir $(SRC{i}:%.c=%.o)))\n"
             objects += f"$(OBJS{i}) "
             build += exec + " "
             runall += f"\t{q}./{exec}\n"
-            targets += f"# target: {stem}\n{exec}: $(OBJS{i})\n\t{q}$(CC) $^ $(LFLAGS) -o $@\n\n"
-            tgtmenu += f'{stem}: {exec}\n\t@echo "{"*"*50}"\n\t@echo "Running {stem}..."\n\t@echo "{"*"*50}"\n\t{q}./{exec}\n\n'
+            tgtexes += f"# target: {stem}\n{exec}: $(OBJS{i})\n"
+            tgtexes += f"\t{q}$(CC) $^ $(LFLAGS) -o $@\n\n"
+            tgtmenu += f"{stem}: {exec}\n"
+            tgtmenu += f"\t@echo '{'*'*50}'\n"
+            tgtmenu += f"\t@echo 'Running {stem}...'\n"
+            tgtmenu += f"\t@echo '{'*'*50}'\n"
+            tgtmenu += f"\t{q}./{exec}\n\n"
             phony += stem + " "
             info += f'\t@echo "{stem}: to run {stem}"\n'
+        tgtexes = tgtexes.replace("  ", " ")
         make = f"""#{'-'*50}>
 # makefile autogenerated by python script
 # customize it following your own needs <3
@@ -304,14 +335,11 @@ build: {build.strip()}
 run: build
 \t{runall.strip()}
 
-{targets.strip()}
+{tgtexes.strip()}
 
-# targets for each object
-$(BUILD_DIR)/%.c.o: %.c
-\t{q}mkdir -p $(dir $@)
-\t{q}$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
+{tgtobjs.strip()}
 
-.PHONY: clean build run {phony.strip()} info
+.PHONY: info build run {phony.strip()} clean
 
 {tgtmenu.strip()}
 
@@ -335,7 +363,7 @@ clean:
 
 
 # make some space :p
-print("\n"*10)
+print("\n"*5)
 
 b = Builder()
 b.load("sample")
@@ -349,5 +377,6 @@ b.printListIncludeFolders()
 print("Dependencies for each file:")
 b.printListDependencies()
 """
-b.build("sample/build", run=False, clean=False)
+
+b.build("sample/build", run=False, clean=True)
 b.createMakefile("sample/build")
