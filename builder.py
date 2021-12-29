@@ -220,7 +220,9 @@ class Builder:
                         cmd = gccCompile(cFile)
                         if not cfg.beQuiet:
                             print(cmd)
-                        os.system(cmd)
+                        errCode = os.system(cmd)
+                        if errCode!=0:
+                            raise Exception(f"Error during compilation process (code:{errCode})")
                         fileCounter += 1
                         break
 
@@ -236,7 +238,9 @@ class Builder:
                         cmd = gccLink(cFile)
                         if not cfg.beQuiet:
                             print(cmd)
-                        os.system(cmd)
+                        errCode = os.system(cmd)
+                        if errCode!=0:
+                            raise Exception(f"Error during linking process (code:{errCode})")
                         fileCounter += 1
                         break
         
@@ -393,6 +397,9 @@ b.printListIncludeFolders()
 print("Dependencies for each file:")
 b.printListDependencies()
 """
-
-b.build("sample/build", run=False, clean=True)
-b.createMakefile("sample/build")
+try:
+    b.build("sample/build", run=False, clean=True)
+    b.createMakefile("sample/build")
+except Exception as ex:
+    print(ex)
+    exit(1)
