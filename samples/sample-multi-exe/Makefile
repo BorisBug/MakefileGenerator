@@ -30,7 +30,7 @@ OBJ4 := $(addprefix $(BUILD)/, $(notdir $(SRC4:%.c=%.o)))
 OBJS := $(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4)
 
 # folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type d))
+INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
 CFLAGS := -MMD -Wall -Werror -Wpedantic -Wextra
@@ -113,11 +113,11 @@ info:
 	@echo '******************** Targets *********************'
 	@echo 'info: to print this menu'
 	@echo 'build: to compile and link all sources (default)'
-	@echo "run: to run all the executables"
-	@echo "main: to run main"
-	@echo "buffer_test: to run buffer_test"
-	@echo "memset_test: to run memset_test"
-	@echo "canbus_test: to run canbus_test"
+	@echo 'run: to run all the executables'
+	@echo 'main: to run main'
+	@echo 'buffer_test: to run buffer_test'
+	@echo 'memset_test: to run memset_test'
+	@echo 'canbus_test: to run canbus_test'
 	@echo 'clean: to remove the build folder'
 	@echo '**************************************************'
 	@echo ''

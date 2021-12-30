@@ -343,8 +343,8 @@ class Builder:
             tgtmenu += f"\t{q}./{exec}\n\n"
             # items for the menu
             if menuinfo=="":
-                menuinfo += '\t@echo "run: to run all the executables"\n'
-            menuinfo += f'\t@echo "{stem}: to run {stem}"\n'
+                menuinfo += "\t@echo 'run: to run all the executables'\n"
+            menuinfo += f"\t@echo '{stem}: to run {stem}'\n"
             # add menu items to phony
             if phony=="":
                 phony += "run "
@@ -399,7 +399,7 @@ CC := {cfg.compiler}
 {objects.strip()}
 
 # folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type d))
+INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
 CFLAGS := -MMD {cfg.cFlags}

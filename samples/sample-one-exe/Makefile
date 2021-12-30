@@ -20,7 +20,7 @@ SRCS := $(shell find $(SOURCE) -name '*.c')
 OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))
 
 # folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type d))
+INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
 CFLAGS := -MMD -Wall -Werror -Wpedantic -Wextra
@@ -70,8 +70,8 @@ info:
 	@echo '******************** Targets *********************'
 	@echo 'info: to print this menu'
 	@echo 'build: to compile and link all sources (default)'
-	@echo "run: to run all the executables"
-	@echo "canbus_test: to run canbus_test"
+	@echo 'run: to run all the executables'
+	@echo 'canbus_test: to run canbus_test'
 	@echo 'clean: to remove the build folder'
 	@echo '**************************************************'
 	@echo ''

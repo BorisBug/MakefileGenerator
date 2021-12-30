@@ -15,6 +15,7 @@ Done
 010 templist: timestamps and relpath, improve avoiding repetitive calculations
 011 error: raise exception and return nonzero in case of error
 012 generic object target improvement
+013 includes only with folders that are containing .h files
 
 Doing
 xxx find a better way to "src=" on makefile for the case of multiple execs
