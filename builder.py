@@ -189,7 +189,7 @@ class Builder:
                 objs = ""
                 for oFile in self._deps[exeName]:
                     objs += str(getBuildRelativePath(oFile, ".o")) + " "
-                return objs.strip()
+                return objs
 
             out = getBuildRelativePath(cFile, cfg.execExtension)
             objs = getBuildObjs(Path(cFile).stem + cfg.execExtension)
@@ -260,152 +260,215 @@ class Builder:
                     pass
 
     def createMakefile(self, pathBuild="build"):
+        def fullReplace(string:str, fromStr:str, toStr:str):
+            while string.find(fromStr)>=0:
+                string = string.replace(fromStr, toStr)
+            return string
+
         pathBuild = Path(pathBuild)
         if pathBuild.is_relative_to(self._origin):
             pathBuild = pathBuild.relative_to(self._origin)
 
-        execs = sources = objectx = objects = phony = ""
-        build = tgtobjs = tgtexes = tgtmenu = runall = info = ""        
+        execs = sources = objects = objx = phony = ""
+        build = tgtobjs = tgtexes = tgtmenu = runall = menuinfo = ""
+        
+        # the quiet/verbose mode        
         q = "@" if cfg.beQuiet else ""
 
-        if cfg.keepFolderStructure:
-            tgtobjs += f"# targets for each object\n"
-            tgtobjs += f"$(BUILD_DIR)/%.o: %.c\n"
-            tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
-            tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INC_FLAGS)\n\n"
-        else:
-            dirs = []
-            for file in self._paths:
-                file = self._paths[file].relative_to(self._origin)
-                if file.suffix==".c" and file.parent not in dirs:
-                    dirs.append(file.parent)
-                    
-            for dir in dirs:
-                tgtobjs += f"# target for objects inside of '{dir}'\n"
-                tgtobjs += f"$(BUILD_DIR)/%.o: {dir}/%.c\n"
-                tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
-                tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INC_FLAGS)\n\n"
+        if len(self._execs)<=1:
+            sources += f"SRCS := $(shell find $(SOURCE) -name '*.c')\n"
+            if cfg.keepFolderStructure:
+                objects += f"OBJS := $(SRCS:%.c=$(BUILD)/%.o)\n"
+            else:
+                objects += f"OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))\n" 
+        if len(self._execs)<=0:
+            build += "$(OBJS)"
 
         for i, file in enumerate(self._execs):
             i += 1
             srcs = ""
             stem = Path(file).stem
             exeName = stem + cfg.execExtension
+            if len(self._execs)==1:
+                execN = "EXEC"
+                srcN = "SRCS"
+                objN = "OBJS"
+            else:
+                execN = f"EXEC{i}"
+                srcN = f"SRC{i}"
+                objN = f"OBJ{i}"
 
+            # path of each executable
             if cfg.execOnBuildRoot or not cfg.keepFolderStructure:
-                exec = f"$(BUILD_DIR)/$(EXEC{i})"
+                exec = f"$(BUILD)/$({execN})"
             else:
                 file = self._paths[file].relative_to(self._origin)
-                exec = f"$(BUILD_DIR)/{file.parent}/$(EXEC{i})"
+                exec = f"$(BUILD)/{file.parent}/$({execN})"
 
-            execs += f"EXEC{i} := {stem}\n" 
-            for file in self._deps[exeName]:
-                file = self._paths[file].relative_to(self._origin)
-                srcs += str(Path(file.parent, file.stem + ".c")) + " "
-            sources += f"SRC{i} := {srcs.strip()}\n"
-           #sources += f"SRC{i} := $(shell find $(SRC_DIRS) -name '*.c')\n"
-            if cfg.keepFolderStructure:
-                objectx += f"OBJS{i} := $(SRC{i}:%.c=$(BUILD_DIR)/%.o)\n"
-            else:
-                objectx += f"OBJS{i} := $(addprefix $(BUILD_DIR)/, $(notdir $(SRC{i}:%.c=%.o)))\n"
-            objects += f"$(OBJS{i}) "
+            # target for each executable
+            if execs=="":
+                execs += "# executable(s)\n"
+            execs += f"{execN} := {stem}\n" 
+            # source files
+            if len(self._execs)>1:
+                for file in self._deps[exeName]:
+                    file = self._paths[file].relative_to(self._origin)
+                    srcs += str(Path(file.parent, file.stem + ".c")) + " "
+                sources += f"{srcN} := {srcs}\n"
+                # the transformation from .c to .o, is also deciding the folder structure
+                if cfg.keepFolderStructure:
+                    objects += f"{objN} := $({srcN}:%.c=$(BUILD)/%.o)\n"
+                else:
+                    objects += f"{objN} := $(addprefix $(BUILD)/, $(notdir $({srcN}:%.c=%.o)))\n"
+                # the sum of all objects (to use later for .d files)
+                objx += f"$({objN}) "
+            # the dependencies for the big "build"
             build += exec + " "
+            # the executables for the big "run"
+            if runall=="":
+                runall += "# run all\n"
+                runall += "run: build\n"
+                runall += f"\t@echo '{'*'*50}'\n"
+                runall += f"\t@echo 'Running all executables...'\n"
+                runall += f"\t@echo '{'*'*50}'\n"
             runall += f"\t{q}./{exec}\n"
-            tgtexes += f"# target: {stem}\n{exec}: $(OBJS{i})\n"
+            # targets for executables
+            tgtexes += f"# target: {stem}\n{exec}: $({objN})\n"
             tgtexes += f"\t{q}$(CC) $^ $(LFLAGS) -o $@\n\n"
+            # targets from the "menu"
             tgtmenu += f"{stem}: {exec}\n"
             tgtmenu += f"\t@echo '{'*'*50}'\n"
             tgtmenu += f"\t@echo 'Running {stem}...'\n"
             tgtmenu += f"\t@echo '{'*'*50}'\n"
             tgtmenu += f"\t{q}./{exec}\n\n"
+            # items for the menu
+            if menuinfo=="":
+                menuinfo += '\t@echo "run: to run all the executables"\n'
+            menuinfo += f'\t@echo "{stem}: to run {stem}"\n'
+            # add menu items to phony
+            if phony=="":
+                phony += "run "
             phony += stem + " "
-            info += f'\t@echo "{stem}: to run {stem}"\n'
-        tgtexes = tgtexes.replace("  ", " ")
+
+        if objx!="":
+            objects += f"OBJS := {objx}\n"
+            
+        if cfg.keepFolderStructure:
+            # if we replicate the folder structure then we can 
+            # use the generic target matching .o and .c files
+            tgtobjs += f"# targets for each object\n"
+            tgtobjs += f"$(BUILD)/%.o: %.c\n"
+            tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
+            tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n\n"
+        else:
+            # if we don't replicate the folder structure then we are forced to
+            # have a dedicated target for each folder level containing sources
+            # ..stupid make? ..or me not knowing how to use make properly? :p
+            levels = 0
+            for file in self._srcs:
+                file = self._paths[file].relative_to(self._origin)
+                if levels < len(file.parts):
+                    levels = len(file.parts)
+            for level in range(0, levels):
+                dir = "."
+                if level>0:
+                    dir += "/*"*level
+                tgtobjs += f"# target for files inside of '{dir}' (level {level})\n"
+                tgtobjs += f"$(BUILD)/%.o: {dir}/%.c\n"
+                tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
+                tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n\n"
+
         make = f"""#{'-'*50}>
 # makefile autogenerated by python script
 # customize it following your own needs <3
 #{'-'*50}>
 
-# executable(s)
-{execs.strip()}
+{execs}
 
 # folders
-BUILD_DIR := {pathBuild}
-SRC_DIRS := .
+BUILD := {pathBuild}
+SOURCE := .
 
 # compiler / linker
 CC := {cfg.compiler}
 
 # sources
-{sources.strip()}
+{sources}
 
 # objects
-{objectx.strip()}
-OBJS := {objects.strip()}
+{objects.strip()}
 
 # folders to include on compilation time
-INC_DIRS := $(shell find $(SRC_DIRS) -type d)
-INC_FLAGS := $(addprefix -I,$(INC_DIRS))
+INCS := $(addprefix -I,$(shell find $(SOURCE) -type d))
 
 # flags for compilation & linking
-CFLAGS := -MMD -MP {cfg.cFlags}
+CFLAGS := -MMD {cfg.cFlags}
 LFLAGS := {cfg.lFlags}
 
 # targets ------------------>
 
 # build all
-build: {build.strip()}
+build: {build}
 
-# run all
-run: build
-\t{runall.strip()}
+{runall}
 
-{tgtexes.strip()}
+{tgtexes}
 
-{tgtobjs.strip()}
+{tgtobjs}
 
-.PHONY: info build run {phony.strip()} clean
+.PHONY: info build {phony} clean
 
-{tgtmenu.strip()}
+{tgtmenu}
 
 info:
 \t@clear
-\t@echo \"{'*'*20} Targets {'*'*21}\"
-\t@echo \"info: to print this menu\"
-\t@echo \"build: to compile and link all sources (default)\"
-\t@echo \"run: to run all the executables\"
-\t{info.strip()}
-\t@echo \"clean: to remove the {pathBuild} folder\"
-\t@echo \"{'*'*50}\"
-\t@echo \"\"
+\t@echo '{'*'*20} Targets {'*'*21}'
+\t@echo 'info: to print this menu'
+\t@echo 'build: to compile and link all sources (default)'
+{menuinfo}\t@echo 'clean: to remove the {pathBuild} folder'
+\t@echo '{'*'*50}'
+\t@echo ''
 
 clean:
-\t{q}rm -rf $(BUILD_DIR)
+\t{q}rm -rf $(BUILD)
 
 -include $(OBJS:.o=.d)\n"""
+        make = fullReplace(make, " \n", "\n")
+        make = fullReplace(make, "\t\n", "\n")
+        make = fullReplace(make, "  ", " ")
+        make = fullReplace(make, "\n\n\n", "\n\n")
         with open(Path(self._origin, "Makefile"), "w") as f:
             f.write(make)
 
 
 
 # make some space :p
-print("\n"*5)
+print("\n"*3)
 
 b = Builder()
-b.load("sample")
-print("Files to convert into objects:")
-b.printListSources()
-"""
-print("Files becoming executables:")
-b.printListExecs()
-print("Folders with header files to include:")
-b.printListIncludeFolders()
-print("Dependencies for each file:")
-b.printListDependencies()
-"""
+
 try:
-    b.build("sample/build", run=False, clean=True)
-    b.createMakefile("sample/build")
+#   b.load("sample")
+#   print("Files to convert into objects:")
+#   b.printListSources()
+#   print("Files becoming executables:")
+#   b.printListExecs()
+#   print("Folders with header files to include:")
+#   b.printListIncludeFolders()
+#   print("Dependencies for each file:")
+#   b.printListDependencies()
+#   b.build("sample/build", run=False, clean=True)
+#   b.createMakefile("sample/build")
+
+    b.load("samples/sample-no-exe")
+    b.createMakefile("samples/sample-no-exe/build")
+    b.load("samples/sample-one-exe")
+    b.createMakefile("samples/sample-one-exe/build")
+    b.load("samples/sample-one-exe-complex")
+    b.createMakefile("samples/sample-one-exe-complex/build")
+    b.load("samples/sample-multi-exe")
+    b.createMakefile("samples/sample-multi-exe/build")
+    exit(0)
 except Exception as ex:
     print(ex)
     exit(1)
