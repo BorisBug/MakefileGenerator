@@ -8,5 +8,11 @@ https://www.gnu.org/software/make/manual/make.html
 the best example
 https://makefiletutorial.com/
 
+people doing similar stuff (i'm not alone!)
+https://github.com/topics/makefile-generation
+
 configuration ideas
 https://martin-thoma.com/configuration-files-in-python/#python-configuration-file
+
+Many important tips here
+https://stackoverflow.com/questions/3576698/simple-makefile-generation-utility

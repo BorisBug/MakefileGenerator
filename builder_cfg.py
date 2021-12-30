@@ -14,7 +14,7 @@ lFlags = ""
 # print gcc commands
 # True: do not print shell commands on the terminal
 # False: print the shell commands on the terminal
-beQuiet = False
+beQuiet = True
 
 # extension (suffix) for executables
 # in linux/unix typically there is no extension for executables
