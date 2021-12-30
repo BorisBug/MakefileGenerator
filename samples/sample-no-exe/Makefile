@@ -17,7 +17,7 @@ SRCS := $(shell find $(SOURCE) -name '*.c')
 OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))
 
 # folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type d))
+INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
 CFLAGS := -MMD -Wall -Werror -Wpedantic -Wextra
