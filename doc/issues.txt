@@ -19,11 +19,12 @@ Done
 
 Doing
 xxx find a better way to "src=" on makefile for the case of multiple execs
-xxx find a way to fix the problem as in the example on "simple-one-exe-complex"
+xxx find a way to fix the problem as in the example on "simple-one-exe-complex" (using explicit list qill solve it.. but is there a better way?)
 
 Todo
 xxx add coverage option
 xxx file name duplicated.. should i do something about it?
+xxx cfg: explicit source list (insetad of glob/find/wildcard)
 
 
 ----->

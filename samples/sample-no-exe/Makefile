@@ -20,8 +20,8 @@ OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))
 INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
-CFLAGS := -MMD -Wall -Werror -Wpedantic -Wextra
-LFLAGS :=
+CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
+LDFLAGS :=
 
 # targets ------------------>
 
@@ -43,18 +43,18 @@ $(BUILD)/%.o: ./*/*/%.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
-.PHONY: info build clean
-
-info:
+help:
 	@clear
 	@echo '******************** Targets *********************'
-	@echo 'info: to print this menu'
-	@echo 'build: to compile and link all sources (default)'
+	@echo 'help: to print this menu'
+	@echo 'build: to compile all sources (default)'
 	@echo 'clean: to remove the build folder'
 	@echo '**************************************************'
 	@echo ''
 
 clean:
 	@rm -rf $(BUILD)
+
+.PHONY: help build clean
 
 -include $(OBJS:.o=.d)
