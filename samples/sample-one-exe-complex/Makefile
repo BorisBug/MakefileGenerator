@@ -23,8 +23,8 @@ OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))
 INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
-CFLAGS := -MMD -Wall -Werror -Wpedantic -Wextra
-LFLAGS :=
+CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
+LDFLAGS :=
 
 # targets ------------------>
 
@@ -36,11 +36,12 @@ run: build
 	@echo '**************************************************'
 	@echo 'Running all executables...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC)
 
 # target: main
 $(BUILD)/$(EXEC): $(OBJS)
-	@$(CC) $^ $(LFLAGS) -o $@
+	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target for files inside of '.' (level 0)
 $(BUILD)/%.o: ./%.c
@@ -57,18 +58,18 @@ $(BUILD)/%.o: ./*/*/%.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
-.PHONY: info build run main clean
-
 main: $(BUILD)/$(EXEC)
+	@echo ''
 	@echo '**************************************************'
 	@echo 'Running main...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC)
 
-info:
+help:
 	@clear
 	@echo '******************** Targets *********************'
-	@echo 'info: to print this menu'
+	@echo 'help: to print this menu'
 	@echo 'build: to compile and link all sources (default)'
 	@echo 'run: to run all the executables'
 	@echo 'main: to run main'
@@ -78,5 +79,7 @@ info:
 
 clean:
 	@rm -rf $(BUILD)
+
+.PHONY: help build run main clean
 
 -include $(OBJS:.o=.d)

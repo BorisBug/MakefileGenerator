@@ -5,7 +5,7 @@ https://www.gnu.org/software/make/
 official manual
 https://www.gnu.org/software/make/manual/make.html
 
-the best example
+the best tutorial
 https://makefiletutorial.com/
 
 people doing similar stuff (i'm not alone!)
@@ -14,5 +14,8 @@ https://github.com/topics/makefile-generation
 configuration ideas
 https://martin-thoma.com/configuration-files-in-python/#python-configuration-file
 
-Many important tips here
+many important tips here
 https://stackoverflow.com/questions/3576698/simple-makefile-generation-utility
+
+very good example / generic makefile
+https://gist.github.com/maxtruxa/4b3929e118914ccef057f8a05c614b0f

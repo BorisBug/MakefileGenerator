@@ -17,10 +17,12 @@ SOURCE := .
 CC := gcc
 
 # sources
-SRC1 := main.c lib/memset/memset.c lib/canbus/canbus.c lib/buffer/buffer.c
-SRC2 := test/buffer_test.c lib/unity/unity.c lib/buffer/buffer.c
-SRC3 := test/memset_test.c lib/unity/unity.c lib/memset/memset.c
-SRC4 := test/canbus_test.c lib/unity/unity.c lib/canbus/canbus.c lib/buffer/buffer.c
+SRC1 := lib/buffer/buffer.c lib/canbus/canbus.c lib/memset/memset.c \
+	main.c
+SRC2 := lib/buffer/buffer.c lib/unity/unity.c test/buffer_test.c
+SRC3 := lib/memset/memset.c lib/unity/unity.c test/memset_test.c
+SRC4 := lib/buffer/buffer.c lib/canbus/canbus.c lib/unity/unity.c \
+	test/canbus_test.c
 
 # objects
 OBJ1 := $(addprefix $(BUILD)/, $(notdir $(SRC1:%.c=%.o)))
@@ -33,39 +35,44 @@ OBJS := $(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4)
 INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
-CFLAGS := -MMD -Wall -Werror -Wpedantic -Wextra
-LFLAGS :=
+CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
+LDFLAGS :=
 
 # targets ------------------>
 
 # build all
-build: $(BUILD)/$(EXEC1) $(BUILD)/$(EXEC2) $(BUILD)/$(EXEC3) $(BUILD)/$(EXEC4)
+build: $(BUILD)/$(EXEC1) $(BUILD)/$(EXEC2) $(BUILD)/$(EXEC3) \
+	$(BUILD)/$(EXEC4)
 
 # run all
 run: build
 	@echo '**************************************************'
 	@echo 'Running all executables...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC1)
+	@echo ''
 	@./$(BUILD)/$(EXEC2)
+	@echo ''
 	@./$(BUILD)/$(EXEC3)
+	@echo ''
 	@./$(BUILD)/$(EXEC4)
 
 # target: main
 $(BUILD)/$(EXEC1): $(OBJ1)
-	@$(CC) $^ $(LFLAGS) -o $@
+	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target: buffer_test
 $(BUILD)/$(EXEC2): $(OBJ2)
-	@$(CC) $^ $(LFLAGS) -o $@
+	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target: memset_test
 $(BUILD)/$(EXEC3): $(OBJ3)
-	@$(CC) $^ $(LFLAGS) -o $@
+	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target: canbus_test
 $(BUILD)/$(EXEC4): $(OBJ4)
-	@$(CC) $^ $(LFLAGS) -o $@
+	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target for files inside of '.' (level 0)
 $(BUILD)/%.o: ./%.c
@@ -82,36 +89,42 @@ $(BUILD)/%.o: ./*/*/%.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
-.PHONY: info build run main buffer_test memset_test canbus_test clean
-
 main: $(BUILD)/$(EXEC1)
+	@echo ''
 	@echo '**************************************************'
 	@echo 'Running main...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC1)
 
 buffer_test: $(BUILD)/$(EXEC2)
+	@echo ''
 	@echo '**************************************************'
 	@echo 'Running buffer_test...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC2)
 
 memset_test: $(BUILD)/$(EXEC3)
+	@echo ''
 	@echo '**************************************************'
 	@echo 'Running memset_test...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC3)
 
 canbus_test: $(BUILD)/$(EXEC4)
+	@echo ''
 	@echo '**************************************************'
 	@echo 'Running canbus_test...'
 	@echo '**************************************************'
+	@echo ''
 	@./$(BUILD)/$(EXEC4)
 
-info:
+help:
 	@clear
 	@echo '******************** Targets *********************'
-	@echo 'info: to print this menu'
+	@echo 'help: to print this menu'
 	@echo 'build: to compile and link all sources (default)'
 	@echo 'run: to run all the executables'
 	@echo 'main: to run main'
@@ -124,5 +137,7 @@ info:
 
 clean:
 	@rm -rf $(BUILD)
+
+.PHONY: help build run main buffer_test memset_test canbus_test clean
 
 -include $(OBJS:.o=.d)
