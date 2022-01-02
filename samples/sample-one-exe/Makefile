@@ -3,82 +3,76 @@
 # customize it following your own needs <3
 #-------------------------------------------------->
 
-# executable(s)
-EXEC := canbus_test
-
-# folders
-BUILD := build
-SOURCE := .
-
 # compiler / linker
 CC := gcc
-
-# sources
-SRCS := $(shell find $(SOURCE) -name '*.c')
-
-# objects
-OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))
-
-# folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
 CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
 LDFLAGS :=
 
-# targets ------------------>
+# folders
+SRCDIR := .
+BUILDDIR := build
+
+# executable(s) name(s)
+EXECNAME := canbus_test
+
+# executable(s) path(s)
+EXEC := $(BUILDDIR)/test/$(EXECNAME)
+
+# folders to include on compilation time
+INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
+
+# sources
+SRCS := lib/buffer/buffer.c lib/canbus/canbus.c lib/unity/unity.c \
+	test/canbus_test.c
+
+# objects
+OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
+
+# targets ########################
 
 # build all
-build: $(BUILD)/$(EXEC)
+build: $(EXEC)
 
 # run all
 run: build
-	@echo '**************************************************'
-	@echo 'Running all executables...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC)
+	@echo "**************************************************"
+	@echo "Running all executables..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC)
 
 # target: canbus_test
-$(BUILD)/$(EXEC): $(OBJS)
+$(EXEC): $(OBJS)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
-# target for files inside of '.' (level 0)
-$(BUILD)/%.o: ./%.c
+# targets for each object
+$(BUILDDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
-# target for files inside of './*' (level 1)
-$(BUILD)/%.o: ./*/%.c
-	@mkdir -p $(dir $@)
-	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
-
-# target for files inside of './*/*' (level 2)
-$(BUILD)/%.o: ./*/*/%.c
-	@mkdir -p $(dir $@)
-	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
-
-canbus_test: $(BUILD)/$(EXEC)
-	@echo ''
-	@echo '**************************************************'
-	@echo 'Running canbus_test...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC)
+canbus_test: $(EXEC)
+	@echo ""
+	@echo "**************************************************"
+	@echo "Running canbus_test..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC)
 
 help:
 	@clear
-	@echo '******************** Targets *********************'
-	@echo 'help: to print this menu'
-	@echo 'build: to compile and link all sources (default)'
-	@echo 'run: to run all the executables'
-	@echo 'canbus_test: to run canbus_test'
-	@echo 'clean: to remove the build folder'
-	@echo '**************************************************'
-	@echo ''
+	@echo "******************** Targets *********************"
+	@echo "help: to print this menu"
+	@echo "build: to compile and link all sources (default)"
+	@echo "run: to run all the executables"
+	@echo "canbus_test: to run canbus_test"
+	@echo "clean: to remove the build folder"
+	@echo "**************************************************"
+	@echo ""
 
 clean:
-	@rm -rf $(BUILD)
+	@rm -rf $(BUILDDIR)
 
 .PHONY: help build run canbus_test clean
 

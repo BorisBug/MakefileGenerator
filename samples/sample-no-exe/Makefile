@@ -3,57 +3,48 @@
 # customize it following your own needs <3
 #-------------------------------------------------->
 
-# folders
-BUILD := build
-SOURCE := .
-
 # compiler / linker
 CC := gcc
-
-# sources
-SRCS := $(shell find $(SOURCE) -name '*.c')
-
-# objects
-OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))
-
-# folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # flags for compilation & linking
 CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
 LDFLAGS :=
 
-# targets ------------------>
+# folders
+SRCDIR := .
+BUILDDIR := build
+
+# folders to include on compilation time
+INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
+
+# sources
+SRCS := lib/buffer/buffer.c lib/canbus/canbus.c lib/memset/memset.c \
+	lib/unity/unity.c
+
+# objects
+OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)
+
+# targets ########################
 
 # build all
 build: $(OBJS)
 
-# target for files inside of '.' (level 0)
-$(BUILD)/%.o: ./%.c
-	@mkdir -p $(dir $@)
-	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
-
-# target for files inside of './*' (level 1)
-$(BUILD)/%.o: ./*/%.c
-	@mkdir -p $(dir $@)
-	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
-
-# target for files inside of './*/*' (level 2)
-$(BUILD)/%.o: ./*/*/%.c
+# targets for each object
+$(BUILDDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
 help:
 	@clear
-	@echo '******************** Targets *********************'
-	@echo 'help: to print this menu'
-	@echo 'build: to compile all sources (default)'
-	@echo 'clean: to remove the build folder'
-	@echo '**************************************************'
-	@echo ''
+	@echo "******************** Targets *********************"
+	@echo "help: to print this menu"
+	@echo "build: to compile all sources (default)"
+	@echo "clean: to remove the build folder"
+	@echo "**************************************************"
+	@echo ""
 
 clean:
-	@rm -rf $(BUILD)
+	@rm -rf $(BUILDDIR)
 
 .PHONY: help build clean
 

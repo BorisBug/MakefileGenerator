@@ -3,18 +3,31 @@
 # customize it following your own needs <3
 #-------------------------------------------------->
 
-# executable(s)
-EXEC1 := main
-EXEC2 := buffer_test
-EXEC3 := memset_test
-EXEC4 := canbus_test
-
-# folders
-BUILD := build
-SOURCE := .
-
 # compiler / linker
 CC := gcc
+
+# flags for compilation & linking
+CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
+LDFLAGS :=
+
+# folders
+SRCDIR := .
+BUILDDIR := build
+
+# executable(s) name(s)
+EXECNAME1 := main
+EXECNAME2 := buffer_test
+EXECNAME3 := memset_test
+EXECNAME4 := canbus_test
+
+# executable(s) path(s)
+EXEC1 := $(BUILDDIR)/./$(EXECNAME1)
+EXEC2 := $(BUILDDIR)/test/$(EXECNAME2)
+EXEC3 := $(BUILDDIR)/test/$(EXECNAME3)
+EXEC4 := $(BUILDDIR)/test/$(EXECNAME4)
+
+# folders to include on compilation time
+INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
 
 # sources
 SRC1 := lib/buffer/buffer.c lib/canbus/canbus.c lib/memset/memset.c \
@@ -25,118 +38,100 @@ SRC4 := lib/buffer/buffer.c lib/canbus/canbus.c lib/unity/unity.c \
 	test/canbus_test.c
 
 # objects
-OBJ1 := $(addprefix $(BUILD)/, $(notdir $(SRC1:%.c=%.o)))
-OBJ2 := $(addprefix $(BUILD)/, $(notdir $(SRC2:%.c=%.o)))
-OBJ3 := $(addprefix $(BUILD)/, $(notdir $(SRC3:%.c=%.o)))
-OBJ4 := $(addprefix $(BUILD)/, $(notdir $(SRC4:%.c=%.o)))
+OBJ1 := $(SRC1:%.c=$(BUILDDIR)/%.o)
+OBJ2 := $(SRC2:%.c=$(BUILDDIR)/%.o)
+OBJ3 := $(SRC3:%.c=$(BUILDDIR)/%.o)
+OBJ4 := $(SRC4:%.c=$(BUILDDIR)/%.o)
 OBJS := $(OBJ1) $(OBJ2) $(OBJ3) $(OBJ4)
 
-# folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
-
-# flags for compilation & linking
-CFLAGS := -Wall -Werror -Wpedantic -Wextra -MMD -MP
-LDFLAGS :=
-
-# targets ------------------>
+# targets ########################
 
 # build all
-build: $(BUILD)/$(EXEC1) $(BUILD)/$(EXEC2) $(BUILD)/$(EXEC3) \
-	$(BUILD)/$(EXEC4)
+build: $(EXEC1) $(EXEC2) $(EXEC3) $(EXEC4)
 
 # run all
 run: build
-	@echo '**************************************************'
-	@echo 'Running all executables...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC1)
-	@echo ''
-	@./$(BUILD)/$(EXEC2)
-	@echo ''
-	@./$(BUILD)/$(EXEC3)
-	@echo ''
-	@./$(BUILD)/$(EXEC4)
+	@echo "**************************************************"
+	@echo "Running all executables..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC1)
+	@echo ""
+	@./$(EXEC2)
+	@echo ""
+	@./$(EXEC3)
+	@echo ""
+	@./$(EXEC4)
 
 # target: main
-$(BUILD)/$(EXEC1): $(OBJ1)
+$(EXEC1): $(OBJ1)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target: buffer_test
-$(BUILD)/$(EXEC2): $(OBJ2)
+$(EXEC2): $(OBJ2)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target: memset_test
-$(BUILD)/$(EXEC3): $(OBJ3)
+$(EXEC3): $(OBJ3)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
 # target: canbus_test
-$(BUILD)/$(EXEC4): $(OBJ4)
+$(EXEC4): $(OBJ4)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
-# target for files inside of '.' (level 0)
-$(BUILD)/%.o: ./%.c
+# targets for each object
+$(BUILDDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
-# target for files inside of './*' (level 1)
-$(BUILD)/%.o: ./*/%.c
-	@mkdir -p $(dir $@)
-	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
+main: $(EXEC1)
+	@echo ""
+	@echo "**************************************************"
+	@echo "Running main..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC1)
 
-# target for files inside of './*/*' (level 2)
-$(BUILD)/%.o: ./*/*/%.c
-	@mkdir -p $(dir $@)
-	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
+buffer_test: $(EXEC2)
+	@echo ""
+	@echo "**************************************************"
+	@echo "Running buffer_test..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC2)
 
-main: $(BUILD)/$(EXEC1)
-	@echo ''
-	@echo '**************************************************'
-	@echo 'Running main...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC1)
+memset_test: $(EXEC3)
+	@echo ""
+	@echo "**************************************************"
+	@echo "Running memset_test..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC3)
 
-buffer_test: $(BUILD)/$(EXEC2)
-	@echo ''
-	@echo '**************************************************'
-	@echo 'Running buffer_test...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC2)
-
-memset_test: $(BUILD)/$(EXEC3)
-	@echo ''
-	@echo '**************************************************'
-	@echo 'Running memset_test...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC3)
-
-canbus_test: $(BUILD)/$(EXEC4)
-	@echo ''
-	@echo '**************************************************'
-	@echo 'Running canbus_test...'
-	@echo '**************************************************'
-	@echo ''
-	@./$(BUILD)/$(EXEC4)
+canbus_test: $(EXEC4)
+	@echo ""
+	@echo "**************************************************"
+	@echo "Running canbus_test..."
+	@echo "**************************************************"
+	@echo ""
+	@./$(EXEC4)
 
 help:
 	@clear
-	@echo '******************** Targets *********************'
-	@echo 'help: to print this menu'
-	@echo 'build: to compile and link all sources (default)'
-	@echo 'run: to run all the executables'
-	@echo 'main: to run main'
-	@echo 'buffer_test: to run buffer_test'
-	@echo 'memset_test: to run memset_test'
-	@echo 'canbus_test: to run canbus_test'
-	@echo 'clean: to remove the build folder'
-	@echo '**************************************************'
-	@echo ''
+	@echo "******************** Targets *********************"
+	@echo "help: to print this menu"
+	@echo "build: to compile and link all sources (default)"
+	@echo "run: to run all the executables"
+	@echo "main: to run main"
+	@echo "buffer_test: to run buffer_test"
+	@echo "memset_test: to run memset_test"
+	@echo "canbus_test: to run canbus_test"
+	@echo "clean: to remove the build folder"
+	@echo "**************************************************"
+	@echo ""
 
 clean:
-	@rm -rf $(BUILD)
+	@rm -rf $(BUILDDIR)
 
 .PHONY: help build run main buffer_test memset_test canbus_test clean
 
