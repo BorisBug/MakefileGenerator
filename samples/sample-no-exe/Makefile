@@ -17,7 +17,7 @@ BUILDDIR := build
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
 
-# sources
+# source files
 SRCS := lib/buffer/buffer.c lib/canbus/canbus.c lib/memset/memset.c \
 	lib/unity/unity.c
 

@@ -41,10 +41,10 @@ try:
         #mkr.build(build)
 
         # run make with that makefile
-        os.system(f"cd {source} && make clean && make")
+        cmd = f"cd {source} && make clean && make"
+        print(cmd)
+        os.system(cmd)
 
 except Exception as ex:
     print(ex)
     exit(1)
-
-    

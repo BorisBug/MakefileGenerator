@@ -14,16 +14,13 @@ LDFLAGS :=
 SRCDIR := .
 BUILDDIR := build
 
-# executable(s) name(s)
-EXECNAME := canbus_test
-
-# executable(s) path(s)
-EXEC := $(BUILDDIR)/test/$(EXECNAME)
+# executables
+EXEC := $(BUILDDIR)/test/canbus_test""
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
 
-# sources
+# source files
 SRCS := lib/buffer/buffer.c lib/canbus/canbus.c lib/unity/unity.c \
 	test/canbus_test.c
 
@@ -43,7 +40,7 @@ run: build
 	@echo ""
 	@./$(EXEC)
 
-# target: canbus_test
+# compile/link: canbus_test
 $(EXEC): $(OBJS)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
@@ -52,6 +49,7 @@ $(BUILDDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
+# run: canbus_test
 canbus_test: $(EXEC)
 	@echo ""
 	@echo "**************************************************"
