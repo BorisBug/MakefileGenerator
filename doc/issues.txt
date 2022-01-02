@@ -16,15 +16,18 @@ Done
 011 error: raise exception and return nonzero in case of error
 012 generic object target improvement
 013 includes only with folders that are containing .h files
+014 general improvements
 
 Doing
-xxx find a better way to "src=" on makefile for the case of multiple execs
-xxx find a way to fix the problem as in the example on "simple-one-exe-complex" (using explicit list qill solve it.. but is there a better way?)
+015 cfg: explicit source list (insetad of glob/find/wildcard)
 
 Todo
+xxx fix file names with spaces
+xxx fix shell find on multi exe and complex
+xxx find a better way to "src=" on makefile for the case of multiple execs
+xxx find a way to fix the problem as in the example on "simple-one-exe-complex" (using explicit list qill solve it.. but is there a better way?)
 xxx add coverage option
 xxx file name duplicated.. should i do something about it?
-xxx cfg: explicit source list (insetad of glob/find/wildcard)
 
 
 ----->

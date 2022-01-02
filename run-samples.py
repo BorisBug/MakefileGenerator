@@ -1,7 +1,7 @@
 import os
 from maker import Maker
 
-mkr = Maker()
+# mkr = Maker()
 # mkr.load("samples/sample-multi-exe")
 # print("Files to convert into objects:")
 # mkr.printListSources()
@@ -22,25 +22,29 @@ samples = [
 
 try:
 
+    # the maker object
+    mkr = Maker()
+
     for i, sample in enumerate(samples):
         print("*"*50)
         print(f"{i+1}. run: {sample}")
-        path = f"samples/{sample}"
-        build = f"{path}/build"
+        source = f"samples/{sample}"
+        build = f"{source}/build"
 
         # load source
-        mkr.load(path)
+        mkr.load(source)
 
         # create makefile
         mkr.createMakefile(build)
 
+        # ..or build without the need of a makefile
+        #mkr.build(build)
+
         # run make with that makefile
-        os.system(f"cd {path} && make clean && make")
+        os.system(f"cd {source} && make clean && make")
 
 except Exception as ex:
     print(ex)
     exit(1)
-
-
 
     

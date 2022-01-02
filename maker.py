@@ -1,8 +1,32 @@
 import os
 import shutil
 from pathlib import Path
-import maker_cfg as cfg
+from configparser import ConfigParser
 
+class MakerConfig:
+    def __init__(self) -> None:
+        self._cp = ConfigParser(allow_no_value=True, )
+        self._cp.read("maker.ini")
+    @property
+    def compiler(self): return self._cp.get("config","compiler", fallback="gcc")
+    @property
+    def cflags(self): return self._cp.get("config","cflags", fallback="-Wall -Werror -Wpedantic -Wextra")
+    @property
+    def ldflags(self): return self._cp.get("config","ldflags", fallback="")
+    @property
+    def be_quiet(self): return self._cp.getboolean("config","be_quiet", fallback="True")
+    @property
+    def exec_extension(self): return self._cp.get("config","exec_extension", fallback="")
+    @property
+    def keep_folder_structure(self): return self._cp.getboolean("config","keep_folder_structure", fallback="True")
+    @property
+    def use_explicit_source_list(self): return self._cp.getboolean("config","use_explicit_source_list", fallback="True")
+    def save(self):
+        with open("maker.ini", 'w') as f:
+            self._cp.write(f)
+
+
+cfg = MakerConfig()
 
 class Maker:
     def __init__(self) -> None:
@@ -106,7 +130,7 @@ class Maker:
                                     deps.append(obj)
                     return deps
                 objName = Path(cFile).stem + ".o"
-                exeName = Path(cFile).stem + cfg.execExtension
+                exeName = Path(cFile).stem + cfg.exec_extension
                 self._deps[exeName] = getDeps(objName)
                 self._paths[exeName] = Path(self._paths[cFile].parent, exeName)
     
@@ -133,8 +157,7 @@ class Maker:
             print(f"{dep} -> {' '.join(self._deps[dep])}")
         print()
     
-    def build(self, pathBuild="build", run=True, clean=True):
-
+    def build(self, pathBuild="build", clean=False, run=False):
         # ensure a type Path
         pathBuild = Path(pathBuild)
 
@@ -151,7 +174,7 @@ class Maker:
             if newName in relPaths:
                 path = relPaths[newName]
             else:
-                if(cfg.keepFolderStructure and (newSuffix!=cfg.execExtension or not cfg.execOnBuildRoot)):
+                if cfg.keep_folder_structure:
                     path = self._paths[file].relative_to(self._origin)
                     if pathBuild.is_relative_to(self._origin):
                         path = Path(self._origin, pathBuild.relative_to(self._origin), path.parent, newName)
@@ -180,7 +203,7 @@ class Maker:
             inc = getIncludeFlag()            
             obj = getBuildRelativePath(cFile, ".o")
             src = self._paths[cFile]
-            return f"{cfg.compiler} -c {src} {cfg.cFlags} {inc} -o {obj}".replace("  ", " ")
+            return f"{cfg.compiler} -c {src} {cfg.cflags} {inc} -o {obj}".replace("  ", " ")
 
         def getCmdLink(cFile:str):
             def getBuildObjs(exeName):
@@ -189,9 +212,9 @@ class Maker:
                     objs += str(getBuildRelativePath(oFile, ".o")) + " "
                 return objs
 
-            out = getBuildRelativePath(cFile, cfg.execExtension)
-            objs = getBuildObjs(Path(cFile).stem + cfg.execExtension)
-            return f"{cfg.compiler} {objs} {cfg.ldFlags} -o {out}".replace("  ", " ")
+            out = getBuildRelativePath(cFile, cfg.exec_extension)
+            objs = getBuildObjs(Path(cFile).stem + cfg.exec_extension)
+            return f"{cfg.compiler} {objs} {cfg.ldflags} -o {out}".replace("  ", " ")
 
         def getTimestamp(path):
             stamp = 0.0
@@ -216,7 +239,7 @@ class Maker:
                     stampDep = getTimestamp(self._paths[xFile])
                     if stampObj<stampDep:
                         cmd = getCmdCompile(cFile)
-                        if not cfg.beQuiet:
+                        if not cfg.be_quiet:
                             print(cmd)
                         errCode = os.system(cmd)
                         if errCode!=0:
@@ -226,15 +249,15 @@ class Maker:
 
         # link -> create executable files
         for cFile in self._execs:
-            exeName = Path(cFile).stem + cfg.execExtension
-            stampExe = getTimestamp(getBuildRelativePath(cFile, cfg.execExtension))
+            exeName = Path(cFile).stem + cfg.exec_extension
+            stampExe = getTimestamp(getBuildRelativePath(cFile, cfg.exec_extension))
             for oFile in self._deps[exeName]:
                 # filter files that are not inside the folder structure
                 if oFile in self._paths:
                     stampObj = getTimestamp(getBuildRelativePath(oFile, ".o"))
                     if stampExe<stampObj:
                         cmd = getCmdLink(cFile)
-                        if not cfg.beQuiet:
+                        if not cfg.be_quiet:
                             print(cmd)
                         errCode = os.system(cmd)
                         if errCode!=0:
@@ -242,14 +265,14 @@ class Maker:
                         fileCounter += 1
                         break
         
-        if fileCounter<=0 and not cfg.beQuiet:
+        if fileCounter<=0 and not cfg.be_quiet:
             print("Nothing to build, all dependencies are up-to-date.")
         
         # run all executables
         if run:
             for cFile in self._execs:
-                exePath = getBuildRelativePath(cFile, cfg.execExtension)
-                if not cfg.beQuiet:
+                exePath = getBuildRelativePath(cFile, cfg.exec_extension)
+                if not cfg.be_quiet:
                     print()
                     print(f"Running {exePath.name}...")
                 errCode = os.system(f"./{exePath}")
@@ -257,7 +280,7 @@ class Maker:
                     # should i do something here?
                     pass
 
-    def createMakefile(self, pathBuild="build"):
+    def createMakefile(self, pathBuild="build", runMakeClean=False, runMake=False):
         def fullReplace(string:str, fromStr:str, toStr:str):
             while string.find(fromStr)>=0:
                 string = string.replace(fromStr, toStr)
@@ -273,120 +296,169 @@ class Maker:
                     line += " " + item
             multi += line + "\n"
             return multi
-
+        def safePath(path:str):
+            return str(path).replace(" ","\\ ")
+        def safePath2(path:str, quot="'"):
+            path = str(path)
+            if path.find(" ")>=0:
+                path = quot+path+quot
+            return path
+        def getSourceList(files):
+            sort = []
+            for file in files:
+                file = self._paths[file].relative_to(self._origin)
+                sort.append(safePath2(Path(file.parent, file.stem + '.c')))
+            sort.sort()
+            return sort
+        
         pathBuild = Path(pathBuild)
         if pathBuild.is_relative_to(self._origin):
             pathBuild = pathBuild.relative_to(self._origin)
+        pathBuild = safePath(pathBuild)
 
+        objx = []
+        objects = ["# objects"]
+        execnames = []
+        execpaths = []
+        sources = ["# sources"]
+        tgtobjs = []
+        tgtexes = []
         build = []
+        tgtmenu = []
+        runall = []
         phony = ["help", "build"]
-        execs = sources = objects = objx = ""
-        tgtobjs = tgtexes = tgtmenu = runall = ""
-
-        help = []
-        help.append(f"\t@clear")
-        help.append(f"\t@echo '{'*'*20} Targets {'*'*21}'")
-        help.append(f"\t@echo 'help: to print this menu'")
-        help.append(f"\t@echo 'build: to compile {'and link ' if len(self._execs)>0 else ''}all sources (default)'")
+        help = ["help:"]
+        help.append(f'\t@clear')
+        help.append(f'\t@echo "{"*"*20} Targets {"*"*21}"')
+        help.append(f'\t@echo "help: to print this menu"')
+        help.append(f'\t@echo "build: to compile {"and link " if len(self._execs)>0 else ""}all sources (default)"')
         
         # the quiet/verbose mode        
-        q = "@" if cfg.beQuiet else ""
+        q = "@" if cfg.be_quiet else ""
 
         if len(self._execs)<=1:
-            sources += f"SRCS := $(shell find $(SOURCE) -name '*.c')\n"
-            if cfg.keepFolderStructure:
-                objects += f"OBJS := $(SRCS:%.c=$(BUILD)/%.o)\n"
+            if cfg.use_explicit_source_list:
+                if len(self._execs)==0:
+                    # use all the source files
+                    sources.append(getAsMultiline(f"SRCS :=", getSourceList(self._srcs)).strip())
+                else:
+                    # use the files to create the only executable (exec[0])
+                    exeFileName = Path(self._execs[0]).stem + cfg.exec_extension
+                    sources.append(getAsMultiline(f"SRCS :=", getSourceList(self._deps[exeFileName])).strip())
             else:
-                objects += f"OBJS := $(addprefix $(BUILD)/, $(notdir $(SRCS:%.c=%.o)))\n" 
+                # for one or none executables, we can use all the source files
+                sources.append(f"SRCS := $(shell find $(SRCDIR) -name '*.c')")
+
+            if cfg.keep_folder_structure:
+                objects.append(f"OBJS := $(SRCS:%.c=$(BUILDDIR)/%.o)")
+            else:
+                objects.append(f"OBJS := $(addprefix $(BUILDDIR)/, $(notdir $(SRCS:%.c=%.o)))")
+
         if len(self._execs)<=0:
             build.append("$(OBJS)")
 
         if len(self._execs)>0:
             phony.append("run")
-            help.append("\t@echo 'run: to run all the executables'")
+            help.append('\t@echo "run: to run all the executables"')
+            runall.append('# run all')
+            runall.append('run: build')
+            runall.append(f'\t@echo "{"*"*50}"')
+            runall.append(f'\t@echo "Running all executables..."')
+            runall.append(f'\t@echo "{"*"*50}"')
+            execnames.append("# executable(s) name(s)")
+            execpaths.append("# executable(s) path(s)")
 
         for i, file in enumerate(self._execs):
             stem = Path(file).stem
-            exeName = stem + cfg.execExtension
+            stemFix = stem.replace(" ","\\ ")
+            exeFileName = stem + cfg.exec_extension
             if len(self._execs)==1:
-                execN = "EXEC"
+                execName = "EXECNAME"
+                execPath = "EXEC"
                 srcN = "SRCS"
                 objN = "OBJS"
             else:
                 i += 1
-                execN = f"EXEC{i}"
+                execName = f"EXECNAME{i}"
+                execPath = f"EXEC{i}"
                 srcN = f"SRC{i}"
                 objN = f"OBJ{i}"
 
             # path of each executable
-            if cfg.execOnBuildRoot or not cfg.keepFolderStructure:
-                exec = f"$(BUILD)/$({execN})"
-            else:
+            if cfg.keep_folder_structure:
                 file = self._paths[file].relative_to(self._origin)
-                exec = f"$(BUILD)/{file.parent}/$({execN})"
+                execp = f"$(BUILDDIR)/{file.parent}/$({execName})"
+            else:
+                execp = f"$(BUILDDIR)/$({execName})"
 
-            # target for each executable
-            if execs=="":
-                execs += "# executable(s)\n"
-            execs += f"{execN} := {stem}\n" 
+            # variables for the names of each executable
+            execnames.append(f"{execName} := {stemFix}")
+            # variables for the complete path of each executable
+            execpaths.append(f"{execPath} := {execp}")
+            execPath = f"$({execPath})"
+
             # source files
-            
             if len(self._execs)>1:
-                sort = []
-                for file in self._deps[exeName]:
-                    file = self._paths[file].relative_to(self._origin)
-                    sort.append(str(Path(file.parent, file.stem + ".c")))
-                sort.sort()
-                sources += getAsMultiline(f"{srcN} :=", sort)
-                # the transformation from .c to .o, is also deciding the folder structure
-                if cfg.keepFolderStructure:
-                    objects += f"{objN} := $({srcN}:%.c=$(BUILD)/%.o)\n"
+                
+                if cfg.use_explicit_source_list:
+                    # explicit list of files
+                    sources.append(getAsMultiline(f"{srcN} :=", getSourceList(self._deps[exeFileName])).strip())
                 else:
-                    objects += f"{objN} := $(addprefix $(BUILD)/, $(notdir $({srcN}:%.c=%.o)))\n"
-                # the sum of all objects (to use later for .d files)
-                objx += f"$({objN}) "
-            # the dependencies for the big "build"
-            build.append(exec)
-            # the executables for the big "run"
-            if runall=="":
-                runall += "# run all\n"
-                runall += "run: build\n"
-                runall += f"\t@echo '{'*'*50}'\n"
-                runall += f"\t@echo 'Running all executables...'\n"
-                runall += f"\t@echo '{'*'*50}'\n"
-            runall += f"\t@echo ''\n"
-            runall += f"\t{q}./{exec}\n"
-            # targets for executables
-            tgtexes += f"# target: {stem}\n{exec}: $({objN})\n"
-            tgtexes += f"\t{q}$(CC) $^ $(LDFLAGS) -o $@\n\n"
-            # targets from the "menu"
-            tgtmenu += f"{stem}: {exec}\n"
-            tgtmenu += f"\t@echo ''\n"
-            tgtmenu += f"\t@echo '{'*'*50}'\n"
-            tgtmenu += f"\t@echo 'Running {stem}...'\n"
-            tgtmenu += f"\t@echo '{'*'*50}'\n"
-            tgtmenu += f"\t@echo ''\n"
-            tgtmenu += f"\t{q}./{exec}\n\n"
-            # items for the help
-            help.append(f"\t@echo '{stem}: to run {stem}'")
-            # add menu items to phony
-            phony.append(stem)
-        phony.append("clean")
-        help.append(f"\t@echo 'clean: to remove the {pathBuild} folder'")
-        help.append(f"\t@echo '{'*'*50}'")
-        help.append(f"\t@echo ''")
-        help = "\n".join(help)
+                    # FIXME
+                    # command to find the files
+                    sources.append("# FIXME HERE -> place the corresponding filters")
+                    command = "$(shell find $(SRCDIR) -name '*.c')"
+                    sources.append(f"{srcN} := {command}")
 
-        if objx!="":
-            objects += f"OBJS := {objx}\n"
+                # the transformation from .c to .o, is also creating the folder structure
+                if cfg.keep_folder_structure:
+                    objects.append(f"{objN} := $({srcN}:%.c=$(BUILDDIR)/%.o)")
+                else:
+                    objects.append(f"{objN} := $(addprefix $(BUILDDIR)/, $(notdir $({srcN}:%.c=%.o)))")
+
+                # the sum of all objects (to use later for .d files)
+                objx.append(f"$({objN})")
+
+            # the dependencies for the big "build"
+            build.append(execPath)
+            # the executables for the big "run"
+            runall.append(f'\t@echo ""')
+            runall.append(f"\t{q}./{execPath}")
+            # targets for executables
+            tgtexes.append(f"# target: {stem}")
+            tgtexes.append(f"{execPath}: $({objN})")
+            tgtexes.append(f"\t{q}$(CC) $^ $(LDFLAGS) -o $@\n")
+            # targets from the "menu"
+            stemFix = stem.replace(" ","\\ ")
+            tgtmenu.append(f'{stemFix}: {execPath}')
+            tgtmenu.append(f'\t@echo ""')
+            tgtmenu.append(f'\t@echo "{"*"*50}"')
+            tgtmenu.append(f'\t@echo "Running {stem}..."')
+            tgtmenu.append(f'\t@echo "{"*"*50}"')
+            tgtmenu.append(f'\t@echo ""')
+            tgtmenu.append(f'\t{q}./{execPath}\n')
+            # items for the help
+            stemFix = safePath2(stem,"\'")
+            help.append(f'\t@echo "{stemFix}: to run {stem}"')
+            # add menu items to phony
+            stemFix = safePath2(stem, '"')
+            phony.append(stemFix)
+        
+        phony.append("clean")
+        help.append(f'\t@echo "clean: to remove the {pathBuild} folder"')
+        help.append(f'\t@echo "{"*"*50}"')
+        help.append(f'\t@echo ""')
+
+        if len(objx)>1:
+            objects.append(getAsMultiline(f"OBJS :=", objx))
             
-        if cfg.keepFolderStructure:
+        if cfg.keep_folder_structure:
             # if we replicate the folder structure then we can 
             # use the generic target matching .o and .c files
-            tgtobjs += f"# targets for each object\n"
-            tgtobjs += f"$(BUILD)/%.o: %.c\n"
-            tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
-            tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n\n"
+            tgtobjs.append(f"# targets for each object")
+            tgtobjs.append(f"$(BUILDDIR)/%.o: %.c")
+            tgtobjs.append(f"\t{q}mkdir -p $(dir $@)")
+            tgtobjs.append(f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n")
         else:
             # if we don't replicate the folder structure then we are forced to
             # have a dedicated target for each folder level containing sources
@@ -400,39 +472,51 @@ class Maker:
                 dir = "."
                 if level>0:
                     dir += "/*"*level
-                tgtobjs += f"# target for files inside of '{dir}' (level {level})\n"
-                tgtobjs += f"$(BUILD)/%.o: {dir}/%.c\n"
-                tgtobjs += f"\t{q}mkdir -p $(dir $@)\n"
-                tgtobjs += f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n\n"
+                tgtobjs.append(f"# target for files inside of '{dir}' (level {level})")
+                tgtobjs.append(f"$(BUILDDIR)/%.o: {dir}/%.c")
+                tgtobjs.append(f"\t{q}mkdir -p $(dir $@)")
+                tgtobjs.append(f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n")
 
+        # stringify all lists
+        execnames = "\n".join(execnames)
+        execpaths = "\n".join(execpaths)
+        sources = "\n".join(sources)
+        objects = "\n".join(objects)
+        help = "\n".join(help)
+        tgtmenu = "\n".join(tgtmenu)
+        runall = "\n".join(runall)
+        tgtexes = "\n".join(tgtexes)
+        tgtobjs = "\n".join(tgtobjs)
+
+        # the make template
         make = f"""#{'-'*50}>
 # makefile autogenerated by python script
 # customize it following your own needs <3
 #{'-'*50}>
 
-{execs}
-
-# folders
-BUILD := {pathBuild}
-SOURCE := .
-
 # compiler / linker
 CC := {cfg.compiler}
 
-# sources
-{sources}
+# flags for compilation & linking
+CFLAGS := {cfg.cflags}
+LDFLAGS := {cfg.ldflags}
 
-# objects
-{objects.strip()}
+# folders
+SRCDIR := .
+BUILDDIR := {pathBuild}
+
+{execnames}
+
+{execpaths}
 
 # folders to include on compilation time
-INCS := $(addprefix -I,$(shell find $(SOURCE) -type f -name "*.h" | xargs dirname | sort | uniq))
+INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
 
-# flags for compilation & linking
-CFLAGS := {cfg.cFlags}
-LDFLAGS := {cfg.ldFlags}
+{sources}
 
-# targets ------------------>
+{objects}
+
+# targets ########################
 
 # build all
 {getAsMultiline(f"build:", build)}
@@ -445,18 +529,26 @@ LDFLAGS := {cfg.ldFlags}
 
 {tgtmenu}
 
-help:
 {help}
 
 clean:
-\t{q}rm -rf $(BUILD)
+\t{q}rm -rf $(BUILDDIR)
 
 {getAsMultiline(f".PHONY:", phony)}
 
 -include $(OBJS:.o=.d)\n"""
+
+        # replace extra formatting 
         make = fullReplace(make, " \n", "\n")
         make = fullReplace(make, "\t\n", "\n")
         make = fullReplace(make, "  ", " ")
         make = fullReplace(make, "\n\n\n", "\n\n")
+
         with open(Path(self._origin, "Makefile"), "w") as f:
             f.write(make)
+
+        if runMakeClean:
+            os.system(f"cd {self._origin} && make clean")
+
+        if runMake:
+            os.system(f"cd {self._origin} && make")
