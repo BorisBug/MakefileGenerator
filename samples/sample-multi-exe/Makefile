@@ -14,22 +14,16 @@ LDFLAGS :=
 SRCDIR := .
 BUILDDIR := build
 
-# executable(s) name(s)
-EXECNAME1 := main
-EXECNAME2 := buffer_test
-EXECNAME3 := memset_test
-EXECNAME4 := canbus_test
-
-# executable(s) path(s)
-EXEC1 := $(BUILDDIR)/./$(EXECNAME1)
-EXEC2 := $(BUILDDIR)/test/$(EXECNAME2)
-EXEC3 := $(BUILDDIR)/test/$(EXECNAME3)
-EXEC4 := $(BUILDDIR)/test/$(EXECNAME4)
+# executables
+EXEC1 := $(BUILDDIR)/./main""
+EXEC2 := $(BUILDDIR)/test/buffer_test""
+EXEC3 := $(BUILDDIR)/test/memset_test""
+EXEC4 := $(BUILDDIR)/test/canbus_test""
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
 
-# sources
+# source files
 SRC1 := lib/buffer/buffer.c lib/canbus/canbus.c lib/memset/memset.c \
 	main.c
 SRC2 := lib/buffer/buffer.c lib/unity/unity.c test/buffer_test.c
@@ -63,19 +57,19 @@ run: build
 	@echo ""
 	@./$(EXEC4)
 
-# target: main
+# compile/link: main
 $(EXEC1): $(OBJ1)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
-# target: buffer_test
+# compile/link: buffer_test
 $(EXEC2): $(OBJ2)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
-# target: memset_test
+# compile/link: memset_test
 $(EXEC3): $(OBJ3)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
-# target: canbus_test
+# compile/link: canbus_test
 $(EXEC4): $(OBJ4)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
@@ -84,6 +78,7 @@ $(BUILDDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
+# run: main
 main: $(EXEC1)
 	@echo ""
 	@echo "**************************************************"
@@ -92,6 +87,7 @@ main: $(EXEC1)
 	@echo ""
 	@./$(EXEC1)
 
+# run: buffer_test
 buffer_test: $(EXEC2)
 	@echo ""
 	@echo "**************************************************"
@@ -100,6 +96,7 @@ buffer_test: $(EXEC2)
 	@echo ""
 	@./$(EXEC2)
 
+# run: memset_test
 memset_test: $(EXEC3)
 	@echo ""
 	@echo "**************************************************"
@@ -108,6 +105,7 @@ memset_test: $(EXEC3)
 	@echo ""
 	@./$(EXEC3)
 
+# run: canbus_test
 canbus_test: $(EXEC4)
 	@echo ""
 	@echo "**************************************************"

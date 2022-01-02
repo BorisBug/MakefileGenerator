@@ -17,18 +17,20 @@ Done
 012 generic object target improvement
 013 includes only with folders that are containing .h files
 014 general improvements
+015 cfg: explicit source list (instead of glob/find/wildcard)
 
 Doing
-015 cfg: explicit source list (insetad of glob/find/wildcard)
 
 Todo
-xxx fix file names with spaces
-xxx fix shell find on multi exe and complex
-xxx find a better way to "src=" on makefile for the case of multiple execs
-xxx find a way to fix the problem as in the example on "simple-one-exe-complex" (using explicit list qill solve it.. but is there a better way?)
-xxx add coverage option
+xxx compile cpp files
 xxx file name duplicated.. should i do something about it?
+xxx add coverage option
+xxx option to write cfg on makefile
+xxx option to write cfg file
 
+Not going to do:
+xxx file names with spaces: -> not possible for GNU make
+xxx shell "find" on multi exe and complex -> so much trouble, better to do it manually
 
 ----->
 Boris Snäll

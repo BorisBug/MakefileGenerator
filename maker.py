@@ -1,3 +1,5 @@
+#!python
+
 import os
 import shutil
 from pathlib import Path
@@ -6,7 +8,11 @@ from configparser import ConfigParser
 class MakerConfig:
     def __init__(self) -> None:
         self._cp = ConfigParser(allow_no_value=True, )
-        self._cp.read("maker.ini")
+        fileName = "maker.ini"
+        if os.path.exists(fileName):
+            self._cp.read(fileName)
+        else:
+            self.save(fileName)
     @property
     def compiler(self): return self._cp.get("config","compiler", fallback="gcc")
     @property
@@ -21,10 +27,30 @@ class MakerConfig:
     def keep_folder_structure(self): return self._cp.getboolean("config","keep_folder_structure", fallback="True")
     @property
     def use_explicit_source_list(self): return self._cp.getboolean("config","use_explicit_source_list", fallback="True")
-    def save(self):
-        with open("maker.ini", 'w') as f:
-            self._cp.write(f)
 
+    def save(self, filePath="maker_backup.ini"):
+        df = "DEFAULT"
+        cf = "config"
+        if not self._cp.has_section(cf):
+            self._cp.add_section(cf)
+
+        default = self._cp.defaults()
+        config = self._cp[cf]
+
+        def ensure(key, val):
+           #if not self._cp.has_option(cf,key): config[key] = val
+            if not self._cp.has_option(df,key): default[key] = val
+
+        ensure("compiler", "gcc")
+        ensure("cflags", "-Wall -Werror -Wpedantic -Wextra")
+        ensure("ldflags", "")
+        ensure("be_quiet", "yes")
+        ensure("exec_extension", "")
+        ensure("keep_folder_structure", "yes")
+        ensure("use_explicit_source_list", "yes")
+
+        with open(filePath, 'w') as f:
+            self._cp.write(f)
 
 cfg = MakerConfig()
 
@@ -296,9 +322,13 @@ class Maker:
                     line += " " + item
             multi += line + "\n"
             return multi
-        def safePath(path:str):
+        def safePath1(path:str):
+            # GNU make is not prepared to have spaces in file names...
+            # no meaning in trying to fix the stupid make
             return str(path).replace(" ","\\ ")
         def safePath2(path:str, quot="'"):
+            # GNU make is not prepared to have spaces in file names...
+            # no meaning in trying to fix the stupid make
             path = str(path)
             if path.find(" ")>=0:
                 path = quot+path+quot
@@ -314,13 +344,12 @@ class Maker:
         pathBuild = Path(pathBuild)
         if pathBuild.is_relative_to(self._origin):
             pathBuild = pathBuild.relative_to(self._origin)
-        pathBuild = safePath(pathBuild)
+        pathBuild = safePath2(pathBuild)
 
         objx = []
+        execs = []
+        sources = ["# source files"]
         objects = ["# objects"]
-        execnames = []
-        execpaths = []
-        sources = ["# sources"]
         tgtobjs = []
         tgtexes = []
         build = []
@@ -365,37 +394,31 @@ class Maker:
             runall.append(f'\t@echo "{"*"*50}"')
             runall.append(f'\t@echo "Running all executables..."')
             runall.append(f'\t@echo "{"*"*50}"')
-            execnames.append("# executable(s) name(s)")
-            execpaths.append("# executable(s) path(s)")
+            execs.append("# executables")
 
         for i, file in enumerate(self._execs):
             stem = Path(file).stem
-            stemFix = stem.replace(" ","\\ ")
             exeFileName = stem + cfg.exec_extension
             if len(self._execs)==1:
-                execName = "EXECNAME"
-                execPath = "EXEC"
+                exeN = "EXEC"
                 srcN = "SRCS"
                 objN = "OBJS"
             else:
                 i += 1
-                execName = f"EXECNAME{i}"
-                execPath = f"EXEC{i}"
+                exeN = f"EXEC{i}"
                 srcN = f"SRC{i}"
                 objN = f"OBJ{i}"
 
             # path of each executable
             if cfg.keep_folder_structure:
                 file = self._paths[file].relative_to(self._origin)
-                execp = f"$(BUILDDIR)/{file.parent}/$({execName})"
+                execp = f"$(BUILDDIR)/{file.parent}/{exeFileName}"
             else:
-                execp = f"$(BUILDDIR)/$({execName})"
+                execp = f"$(BUILDDIR)/{exeFileName}"
 
-            # variables for the names of each executable
-            execnames.append(f"{execName} := {stemFix}")
-            # variables for the complete path of each executable
-            execpaths.append(f"{execPath} := {execp}")
-            execPath = f"$({execPath})"
+            # variables for the path of each executable
+            execs.append(f"{exeN} := {execp}")
+            exeN = f"$({exeN})"
 
             # source files
             if len(self._execs)>1:
@@ -420,23 +443,24 @@ class Maker:
                 objx.append(f"$({objN})")
 
             # the dependencies for the big "build"
-            build.append(execPath)
+            build.append(exeN)
             # the executables for the big "run"
             runall.append(f'\t@echo ""')
-            runall.append(f"\t{q}./{execPath}")
+            runall.append(f"\t{q}./{exeN}")
             # targets for executables
-            tgtexes.append(f"# target: {stem}")
-            tgtexes.append(f"{execPath}: $({objN})")
+            tgtexes.append(f"# compile/link: {stem}")
+            tgtexes.append(f"{exeN}: $({objN})")
             tgtexes.append(f"\t{q}$(CC) $^ $(LDFLAGS) -o $@\n")
             # targets from the "menu"
-            stemFix = stem.replace(" ","\\ ")
-            tgtmenu.append(f'{stemFix}: {execPath}')
+            stemFix = safePath1(stem)
+            tgtmenu.append(f"# run: {stem}")
+            tgtmenu.append(f'{stemFix}: {exeN}')
             tgtmenu.append(f'\t@echo ""')
             tgtmenu.append(f'\t@echo "{"*"*50}"')
             tgtmenu.append(f'\t@echo "Running {stem}..."')
             tgtmenu.append(f'\t@echo "{"*"*50}"')
             tgtmenu.append(f'\t@echo ""')
-            tgtmenu.append(f'\t{q}./{execPath}\n')
+            tgtmenu.append(f'\t{q}./{exeN}\n')
             # items for the help
             stemFix = safePath2(stem,"\'")
             help.append(f'\t@echo "{stemFix}: to run {stem}"')
@@ -478,8 +502,7 @@ class Maker:
                 tgtobjs.append(f"\t{q}$(CC) -c $< -o $@ $(CFLAGS) $(INCS)\n")
 
         # stringify all lists
-        execnames = "\n".join(execnames)
-        execpaths = "\n".join(execpaths)
+        execs = "\n".join(execs)
         sources = "\n".join(sources)
         objects = "\n".join(objects)
         help = "\n".join(help)
@@ -505,9 +528,7 @@ LDFLAGS := {cfg.ldflags}
 SRCDIR := .
 BUILDDIR := {pathBuild}
 
-{execnames}
-
-{execpaths}
+{execs}
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
@@ -552,3 +573,11 @@ clean:
 
         if runMake:
             os.system(f"cd {self._origin} && make")
+
+
+
+# in case it is executed from the command line or directly with an IDE
+if __name__ == "__main__":
+    mkr = Maker()
+    mkr.load()
+    mkr.createMakefile()

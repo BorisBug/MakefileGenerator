@@ -14,16 +14,13 @@ LDFLAGS :=
 SRCDIR := .
 BUILDDIR := build
 
-# executable(s) name(s)
-EXECNAME := main
-
-# executable(s) path(s)
-EXEC := $(BUILDDIR)/./$(EXECNAME)
+# executables
+EXEC := $(BUILDDIR)/./main""
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
 
-# sources
+# source files
 SRCS := lib/buffer/buffer.c lib/canbus/canbus.c lib/memset/memset.c \
 	main.c
 
@@ -43,7 +40,7 @@ run: build
 	@echo ""
 	@./$(EXEC)
 
-# target: main
+# compile/link: main
 $(EXEC): $(OBJS)
 	@$(CC) $^ $(LDFLAGS) -o $@
 
@@ -52,6 +49,7 @@ $(BUILDDIR)/%.o: %.c
 	@mkdir -p $(dir $@)
 	@$(CC) -c $< -o $@ $(CFLAGS) $(INCS)
 
+# run: main
 main: $(EXEC)
 	@echo ""
 	@echo "**************************************************"
