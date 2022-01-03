@@ -15,7 +15,7 @@ SRCDIR := .
 BUILDDIR := build
 
 # executables
-EXEC := $(BUILDDIR)/test/canbus_test""
+EXEC := $(BUILDDIR)/test/canbus_test
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))

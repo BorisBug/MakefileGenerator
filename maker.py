@@ -5,6 +5,9 @@ import shutil
 from pathlib import Path
 from configparser import ConfigParser
 
+def getPathAs(path, ext):
+    return Path(path.parent, path.stem + ext)
+
 class MakerConfig:
     def __init__(self) -> None:
         self._cp = ConfigParser(allow_no_value=True, )
@@ -61,15 +64,37 @@ class Maker:
         self._execs = []
         self._folders = []
         self._deps = {}
-        self._paths = {}
-        
+
+    def printListSources(self):
+        for path in self._srcs:
+            print(path.name)
+        print()
+
+    def printListExecs(self):
+        for path in self._execs:
+            print(path.name)
+        print()
+
+    def printListIncludeFolders(self):
+        for path in self._folders:
+            print(path)
+        print()
+
+    def printListDependencies(self):
+        for dep in self._deps:
+            depNames = ""
+            for path in self._deps[dep]:
+                depNames += path.name + " "
+            print(f"{dep.name} -> {depNames}")
+        print()
+            
     def load(self, path="."):
         self._origin = Path(path)
         self._srcs.clear()
         self._execs.clear()
         self._folders.clear()
         self._deps.clear()
-        self._paths.clear()
+        headers = []
 
         # scan recursively the complete folder tree
         def scanOriginFolder():
@@ -78,11 +103,10 @@ class Maker:
                 if path.is_file():
                     # collect all the .c files
                     if path.suffix==".c": 
-                        self._srcs.append(path.name)
-                        self._paths[path.name] = path
+                        self._srcs.append(path)
                     # collect all the .h files
                     elif path.suffix==".h": 
-                        self._paths[path.name] = path
+                        headers.append(path)
                 # if is a folder...
                 elif path.is_dir():
                     # collect only if contains .h files
@@ -102,86 +126,94 @@ class Maker:
                 return content.find(" main(")>=0
 
             # get the list of #include files 
-            def getIncludedDeps(path):
-                content = ""
-                with open(path, "r") as f:
-                    content = f.read()
+            def getIncludedDeps(pathSrc, depList=[]):
+                def getPathFromName(name):
+                    for path in headers:
+                        if name == path.name:
+                            return path
+                    return None                  
+                def getContentFromFile(pathSrc):
+                    content = ""
+                    with open(pathSrc, "r") as f:
+                        content = f.read()
+                    return content
+                def getIncludeListFromContent(content):
+                    def getPos1(startPos):
+                        include = "#include"
+                        pos1 = content.find(include, startPos)
+                        if pos1>=0:
+                            pos1 += len(include)
+                            while pos1<len(content) and content[pos1] == " ":
+                                pos1 += 1
+                        return pos1    
+                    def getPos2(startPos, delim):
+                        return content.find(delim, startPos)
+                    includes = []
+                    pos1 = getPos1(0)
+                    while pos1>=0:
+                        delim = content[pos1]
+                        pos1 += 1
+                        pos2 = -1
+                        if delim=='"':
+                            pos2 = getPos2(pos1, '"')
+                        elif delim=="<":
+                            pos2 = getPos2(pos1, '>')
+                        if pos2<0:
+                            # something wrong with the syntax
+                            break
+                        name = content[pos1:pos2]
+                        includes.append(name)
+                        pos1 = getPos1(pos2+1)
+                    return includes
+                def getDepsFromIncludeList(names):
+                    nonlocal depList
+                    # check if the file exist in the structure using "name" only
+                    for name in names:
+                        path = getPathFromName(name)
+                        if not path:
+                            # include out of the structure
+                            continue
+                        if not path in depList:
+                            depList.append(path)
+                            getIncludedDeps(path, depList)
+                    return depList
 
-                deps = []
-                include = '#include "'
-                pos1 = content.find(include)
-                while pos1>=0:
-                    pos1 += len(include)
-                    pos2 = content.find('"', pos1)
-                    if pos2<0:
-                        # something wrong with the syntax
-                        # TODO raise an exception
-                        break
-                    depName = content[pos1:pos2]
-                    deps.append(depName)
-                    pos1 = content.find(include, pos2+1)
-
-                depextra = []
-                for dep in deps:
-                    if dep in self._paths:
-                        depextra += getIncludedDeps(self._paths[dep])
-                    else:
-                        # include out of the folder structure
-                        pass
-                return deps + depextra
+                content = getContentFromFile(pathSrc)
+                includes = getIncludeListFromContent(content)
+                depList = getDepsFromIncludeList(includes)
+                return depList
         
-            # deps for .c files
-            for cFile in self._srcs:
+            # deps for source files
+            for pathSrc in self._srcs:
                 # if it will become executable, save it for the linking process
-                path = self._paths[cFile]
-                if isExe(path):
-                    self._execs.append(cFile)
+                if isExe(pathSrc):
+                    self._execs.append(pathSrc)
 
-                # every .c file generates an .o file
-                obj = path.stem + ".o"
-                self._deps[obj] = [cFile] + getIncludedDeps(path)
-                self._paths[obj] = Path(path.parent, obj)
+                # every source file generates an .o file
+                pathObj = getPathAs(pathSrc, ".o")
+                # each .o file depends on the source and it's included headers
+                depList = getIncludedDeps(pathSrc, [])
+                self._deps[pathObj] = [pathSrc] + depList
 
             # deps for exe files
-            for cFile in self._execs:
+            for path in self._execs:
                 deps = []
-                def getDeps(obj:str):
+                def getObjDeps(path):
                     nonlocal deps
-                    for name in self._deps[obj]:
-                        obj = Path(name).stem + ".o"
-                        if obj in self._deps and obj not in deps:
-                            deps.append(obj)
-                            for obj in getDeps(obj):
-                                if obj not in deps:
-                                    deps.append(obj)
+                    for path in self._deps[path]:
+                        path = getPathAs(path, ".o")
+                        if path in self._deps and path not in deps:
+                            deps.append(path)
+                            for path in getObjDeps(path):
+                                if path not in deps:
+                                    deps.append(path)
                     return deps
-                objName = Path(cFile).stem + ".o"
-                exeName = Path(cFile).stem + cfg.exec_extension
-                self._deps[exeName] = getDeps(objName)
-                self._paths[exeName] = Path(self._paths[cFile].parent, exeName)
+                pathObj = getPathAs(path, ".o")
+                pathExe = getPathAs(path, cfg.exec_extension)
+                self._deps[pathExe] = getObjDeps(pathObj)
     
         scanOriginFolder()
         loadDependencies()
-        
-    def printListSources(self):
-        for name in self._srcs:
-            print(self._paths[name])
-        print()
-
-    def printListExecs(self):
-        for name in self._execs:
-            print(self._paths[name])
-        print()
-
-    def printListIncludeFolders(self):
-        for path in self._folders:
-            print(path)
-        print()
-
-    def printListDependencies(self):
-        for dep in self._deps:
-            print(f"{dep} -> {' '.join(self._deps[dep])}")
-        print()
     
     def build(self, pathBuild="build", clean=False, run=False):
         # ensure a type Path
@@ -193,15 +225,16 @@ class Maker:
         timeStamps = {}
         fileCounter = 0
 
-        def getBuildRelativePath(file:str, newSuffix=""):
+        def getBuildRelativePath(path, newSuffix=""):
             nonlocal pathBuild
-            newName = Path(file).stem + newSuffix
+            newName = path.stem + newSuffix
+            pathKey = Path(path.parent, newName)
 
-            if newName in relPaths:
-                path = relPaths[newName]
+            if pathKey in relPaths:
+                path = relPaths[pathKey]
             else:
                 if cfg.keep_folder_structure:
-                    path = self._paths[file].relative_to(self._origin)
+                    path = path.relative_to(self._origin)
                     if pathBuild.is_relative_to(self._origin):
                         path = Path(self._origin, pathBuild.relative_to(self._origin), path.parent, newName)
                     else:
@@ -212,11 +245,11 @@ class Maker:
                 if not os.path.isdir(path.parent):
                     os.makedirs(path.parent)
                 
-                relPaths[newName] = path
+                relPaths[pathKey] = path
             
             return path
 
-        def getCmdCompile(cFile:str):
+        def getCmdCompile(pathSrc):
             def getIncludeFlag():
                 nonlocal incFlag
                 if incFlag !="":
@@ -227,20 +260,20 @@ class Maker:
                 return incFlag
                 
             inc = getIncludeFlag()            
-            obj = getBuildRelativePath(cFile, ".o")
-            src = self._paths[cFile]
-            return f"{cfg.compiler} -c {src} {cfg.cflags} {inc} -o {obj}".replace("  ", " ")
+            pathObj = getBuildRelativePath(pathSrc, ".o")
+            return f"{cfg.compiler} -c {pathSrc} {cfg.cflags} {inc} -o {pathObj}".replace("  ", " ")
 
-        def getCmdLink(cFile:str):
-            def getBuildObjs(exeName):
+        def getCmdLink(pathSrc):
+            def getBuildObjs(pathExe):
                 objs = ""
-                for oFile in self._deps[exeName]:
-                    objs += str(getBuildRelativePath(oFile, ".o")) + " "
+                for pathObj in self._deps[pathExe]:
+                    objs += str(getBuildRelativePath(pathObj, ".o")) + " "
                 return objs
 
-            out = getBuildRelativePath(cFile, cfg.exec_extension)
-            objs = getBuildObjs(Path(cFile).stem + cfg.exec_extension)
-            return f"{cfg.compiler} {objs} {cfg.ldflags} -o {out}".replace("  ", " ")
+            pathExe = getPathAs(pathSrc, cfg.exec_extension)
+            pathOut = getBuildRelativePath(pathSrc, cfg.exec_extension)
+            objs = getBuildObjs(pathExe)
+            return f"{cfg.compiler} {objs} {cfg.ldflags} -o {pathOut}".replace("  ", " ")
 
         def getTimestamp(path):
             stamp = 0.0
@@ -251,57 +284,63 @@ class Maker:
                 timeStamps[path] = stamp
             return stamp
 
+        def executeCmd(cmd):
+            if not cfg.be_quiet:
+                print(cmd)
+            errCode = os.system(cmd)
+            if errCode!=0:
+                raise Exception(f"Error during building process (code:{errCode})")
+
         # remove build folder
         if clean and pathBuild.is_dir() and pathBuild.cwd()!=pathBuild.absolute():
             shutil.rmtree(pathBuild, ignore_errors = True)
 
-        # compile -> create object files
-        for cFile in self._srcs:
-            oName = Path(cFile).stem + ".o"
-            stampObj = getTimestamp(getBuildRelativePath(cFile, ".o"))
-            for xFile in self._deps[oName]:
-                # filter files that are not inside the folder structure
-                if xFile in self._paths:
-                    stampDep = getTimestamp(self._paths[xFile])
-                    if stampObj<stampDep:
-                        cmd = getCmdCompile(cFile)
-                        if not cfg.be_quiet:
-                            print(cmd)
-                        errCode = os.system(cmd)
-                        if errCode!=0:
-                            raise Exception(f"Error during compilation process (code:{errCode})")
-                        fileCounter += 1
-                        break
+        # compile
+        # -> check timestamps
+        # -> create object files
+        for pathSrc in self._srcs:
+            assert pathSrc.suffix==".c"
+            pathObj = getPathAs(pathSrc, ".o")
+            pathObjRel = getBuildRelativePath(pathSrc, ".o")
+            stampObjRel = getTimestamp(pathObjRel)
+            # check the timestamp of all dependencies
+            for pathDep in self._deps[pathObj]:
+                assert pathDep.suffix==".c" or pathDep.suffix==".h"
+                stampDep = getTimestamp(pathDep)
+                if stampObjRel<stampDep:
+                    executeCmd(getCmdCompile(pathSrc))
+                    fileCounter += 1
+                    break
 
-        # link -> create executable files
-        for cFile in self._execs:
-            exeName = Path(cFile).stem + cfg.exec_extension
-            stampExe = getTimestamp(getBuildRelativePath(cFile, cfg.exec_extension))
-            for oFile in self._deps[exeName]:
-                # filter files that are not inside the folder structure
-                if oFile in self._paths:
-                    stampObj = getTimestamp(getBuildRelativePath(oFile, ".o"))
-                    if stampExe<stampObj:
-                        cmd = getCmdLink(cFile)
-                        if not cfg.be_quiet:
-                            print(cmd)
-                        errCode = os.system(cmd)
-                        if errCode!=0:
-                            raise Exception(f"Error during linking process (code:{errCode})")
-                        fileCounter += 1
-                        break
+        # link 
+        # -> check timestamps
+        # -> create executable files
+        for pathSrc in self._execs:
+            assert pathSrc.suffix==".c"
+            pathExe = getPathAs(pathSrc, cfg.exec_extension)
+            pathExeRel = getBuildRelativePath(pathSrc, cfg.exec_extension)
+            stampExeRel = getTimestamp(pathExeRel)
+            # check the timestamp of all dependencies
+            for pathObj in self._deps[pathExe]:
+                assert pathObj.suffix==".o"
+                pathObjRel = getBuildRelativePath(pathObj, ".o")
+                stampObjRel = getTimestamp(pathObjRel)
+                if stampExeRel<stampObjRel:
+                    executeCmd(getCmdLink(pathSrc))
+                    fileCounter += 1
+                    break
         
         if fileCounter<=0 and not cfg.be_quiet:
             print("Nothing to build, all dependencies are up-to-date.")
         
         # run all executables
         if run:
-            for cFile in self._execs:
-                exePath = getBuildRelativePath(cFile, cfg.exec_extension)
+            for pathSrc in self._execs:
+                pathExe = getBuildRelativePath(pathSrc, cfg.exec_extension)
                 if not cfg.be_quiet:
                     print()
-                    print(f"Running {exePath.name}...")
-                errCode = os.system(f"./{exePath}")
+                    print(f"Running {pathExe.name}...")
+                errCode = os.system(f"./{pathExe}")
                 if errCode!=0:
                     # should i do something here?
                     pass
@@ -315,6 +354,7 @@ class Maker:
             multi = ""
             line = label 
             for item in enum:
+                item = str(item)
                 if len(line + " " + item)>70:
                     multi += line + " \\\n"
                     line = "\t" + item
@@ -322,29 +362,29 @@ class Maker:
                     line += " " + item
             multi += line + "\n"
             return multi
-        def safePath1(path:str):
+        #def safePath1(path:str):
             # GNU make is not prepared to have spaces in file names...
             # no meaning in trying to fix the stupid make
-            return str(path).replace(" ","\\ ")
-        def safePath2(path:str, quot="'"):
+            #return str(path).replace(" ","\\ ")
+        #def safePath2(path:str, quot="'"):
             # GNU make is not prepared to have spaces in file names...
             # no meaning in trying to fix the stupid make
-            path = str(path)
-            if path.find(" ")>=0:
-                path = quot+path+quot
-            return path
+            #path = str(path)
+            #if path.find(" ")>=0:
+            #    path = quot+path+quot
+            #return path
         def getSourceList(files):
             sort = []
-            for file in files:
-                file = self._paths[file].relative_to(self._origin)
-                sort.append(safePath2(Path(file.parent, file.stem + '.c')))
+            for path in files:
+                path = path.relative_to(self._origin)
+                sort.append(getPathAs(path, '.c'))
             sort.sort()
             return sort
         
         pathBuild = Path(pathBuild)
         if pathBuild.is_relative_to(self._origin):
             pathBuild = pathBuild.relative_to(self._origin)
-        pathBuild = safePath2(pathBuild)
+        #pathBuild = safePath2(pathBuild)
 
         objx = []
         execs = []
@@ -368,14 +408,14 @@ class Maker:
         if len(self._execs)<=1:
             if cfg.use_explicit_source_list:
                 if len(self._execs)==0:
-                    # use all the source files
+                    # if there is no executables then use all the source files in the structure
                     sources.append(getAsMultiline(f"SRCS :=", getSourceList(self._srcs)).strip())
                 else:
                     # use the files to create the only executable (exec[0])
-                    exeFileName = Path(self._execs[0]).stem + cfg.exec_extension
-                    sources.append(getAsMultiline(f"SRCS :=", getSourceList(self._deps[exeFileName])).strip())
+                    nameExe = getPathAs(self._execs[0], cfg.exec_extension)
+                    sources.append(getAsMultiline(f"SRCS :=", getSourceList(self._deps[nameExe])).strip())
             else:
-                # for one or none executables, we can use all the source files
+                # for one or none executables, we can use all the source files in the structure
                 sources.append(f"SRCS := $(shell find $(SRCDIR) -name '*.c')")
 
             if cfg.keep_folder_structure:
@@ -396,9 +436,16 @@ class Maker:
             runall.append(f'\t@echo "{"*"*50}"')
             execs.append("# executables")
 
-        for i, file in enumerate(self._execs):
-            stem = Path(file).stem
-            exeFileName = stem + cfg.exec_extension
+        stemExeUnique = {}
+        for i, pathSrc in enumerate(self._execs):
+            if pathSrc.stem in stemExeUnique:
+                stemExeUnique[pathSrc.stem] += 1
+                stem = pathSrc.stem + f"{stemExeUnique[stem]}"
+            else:
+                stemExeUnique[pathSrc.stem] = 1
+                stem = pathSrc.stem
+            nameExe = pathSrc.stem + cfg.exec_extension
+            pathExe = getPathAs(pathSrc, cfg.exec_extension)
             if len(self._execs)==1:
                 exeN = "EXEC"
                 srcN = "SRCS"
@@ -411,10 +458,9 @@ class Maker:
 
             # path of each executable
             if cfg.keep_folder_structure:
-                file = self._paths[file].relative_to(self._origin)
-                execp = f"$(BUILDDIR)/{file.parent}/{exeFileName}"
+                execp = f"$(BUILDDIR)/{pathSrc.relative_to(self._origin).parent}/{nameExe}"
             else:
-                execp = f"$(BUILDDIR)/{exeFileName}"
+                execp = f"$(BUILDDIR)/{nameExe}"
 
             # variables for the path of each executable
             execs.append(f"{exeN} := {execp}")
@@ -425,7 +471,7 @@ class Maker:
                 
                 if cfg.use_explicit_source_list:
                     # explicit list of files
-                    sources.append(getAsMultiline(f"{srcN} :=", getSourceList(self._deps[exeFileName])).strip())
+                    sources.append(getAsMultiline(f"{srcN} :=", getSourceList(self._deps[pathExe])).strip())
                 else:
                     # FIXME
                     # command to find the files
@@ -452,9 +498,8 @@ class Maker:
             tgtexes.append(f"{exeN}: $({objN})")
             tgtexes.append(f"\t{q}$(CC) $^ $(LDFLAGS) -o $@\n")
             # targets from the "menu"
-            stemFix = safePath1(stem)
             tgtmenu.append(f"# run: {stem}")
-            tgtmenu.append(f'{stemFix}: {exeN}')
+            tgtmenu.append(f'{stem}: {exeN}')
             tgtmenu.append(f'\t@echo ""')
             tgtmenu.append(f'\t@echo "{"*"*50}"')
             tgtmenu.append(f'\t@echo "Running {stem}..."')
@@ -462,11 +507,9 @@ class Maker:
             tgtmenu.append(f'\t@echo ""')
             tgtmenu.append(f'\t{q}./{exeN}\n')
             # items for the help
-            stemFix = safePath2(stem,"\'")
-            help.append(f'\t@echo "{stemFix}: to run {stem}"')
+            help.append(f'\t@echo "{stem}: to run {stem}"')
             # add menu items to phony
-            stemFix = safePath2(stem, '"')
-            phony.append(stemFix)
+            phony.append(stem)
         
         phony.append("clean")
         help.append(f'\t@echo "clean: to remove the {pathBuild} folder"')
@@ -488,10 +531,10 @@ class Maker:
             # have a dedicated target for each folder level containing sources
             # ..stupid make? ..or me not knowing how to use make properly? :p
             levels = 0
-            for file in self._srcs:
-                file = self._paths[file].relative_to(self._origin)
-                if levels < len(file.parts):
-                    levels = len(file.parts)
+            for path in self._srcs:
+                path = path.relative_to(self._origin)
+                if levels < len(path.parts):
+                    levels = len(path.parts)
             for level in range(0, levels):
                 dir = "."
                 if level>0:

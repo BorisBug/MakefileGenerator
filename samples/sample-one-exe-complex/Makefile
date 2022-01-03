@@ -15,7 +15,7 @@ SRCDIR := .
 BUILDDIR := build
 
 # executables
-EXEC := $(BUILDDIR)/./main""
+EXEC := $(BUILDDIR)/./main
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
