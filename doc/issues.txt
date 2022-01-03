@@ -18,14 +18,15 @@ Done
 013 includes only with folders that are containing .h files
 014 general improvements
 015 cfg: explicit source list (instead of glob/find/wildcard)
+016 general improvement
 
 Doing
+017 enable file name duplicated (only for 'keep_folder_structure = yes')
 
 Todo
 xxx compile cpp files
-xxx file name duplicated.. should i do something about it?
 xxx add coverage option
-xxx option to write cfg on makefile
+xxx option to write cfg info on makefile
 xxx option to write cfg file
 
 Not going to do:

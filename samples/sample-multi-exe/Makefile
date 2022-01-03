@@ -15,10 +15,10 @@ SRCDIR := .
 BUILDDIR := build
 
 # executables
-EXEC1 := $(BUILDDIR)/./main""
-EXEC2 := $(BUILDDIR)/test/buffer_test""
-EXEC3 := $(BUILDDIR)/test/memset_test""
-EXEC4 := $(BUILDDIR)/test/canbus_test""
+EXEC1 := $(BUILDDIR)/./main
+EXEC2 := $(BUILDDIR)/test/buffer_test
+EXEC3 := $(BUILDDIR)/test/memset_test
+EXEC4 := $(BUILDDIR)/test/canbus_test
 
 # folders to include on compilation time
 INCS := $(addprefix -I,$(shell find $(SRCDIR) -type f -name "*.h" | xargs dirname | sort | uniq))
